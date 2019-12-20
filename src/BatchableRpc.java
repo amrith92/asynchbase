@@ -44,8 +44,8 @@ abstract class BatchableRpc extends HBaseRpc
   // So instead we make them package-private so that subclasses can still
   // access them directly.
 
-  /** Family affected by this RPC.  */
-  /*protected*/ byte[] family;
+  /** Families affected by this RPC.  */
+  /*protected*/ byte[][] families;
 
   /** The timestamp to use for {@link KeyValue}s of this RPC.  */
   /*protected*/ final long timestamp;
@@ -71,17 +71,17 @@ abstract class BatchableRpc extends HBaseRpc
   /**
    * Package private constructor.
    * @param table The name of the table this RPC is for.
-   * @param row The name of the row this RPC is for.
-   * @param family The column family to edit in that table.  Subclass must
-   * validate, this class doesn't perform any validation on the family.
+   * @param key The name of the row this RPC is for.
+   * @param families The column families to edit in that table.  Subclass must
+   * validate, this class doesn't perform any validation on the families.
    * @param timestamp The timestamp to use for {@link KeyValue}s of this RPC.
    * @param lockid Explicit row lock to use, or {@link RowLock#NO_LOCK}.
    */
   BatchableRpc(final byte[] table,
-               final byte[] key, final byte[] family,
+               final byte[] key, final byte[][] families,
                final long timestamp, final long lockid) {
     super(table, key);
-    this.family = family;
+    this.families = families;
     this.timestamp = timestamp;
     this.lockid = lockid;
   }
@@ -94,7 +94,7 @@ abstract class BatchableRpc extends HBaseRpc
    */
   BatchableRpc(final byte[] table, final byte[] key) {
     super(table, key);
-    this.family = null;
+    this.families = null;
     this.timestamp = Long.MAX_VALUE;
     this.lockid = RowLock.NO_LOCK;
   }
@@ -129,7 +129,12 @@ abstract class BatchableRpc extends HBaseRpc
 
   @Override
   public final byte[] family() {
-    return family;
+    return families == null ? null : families[0];
+  }
+
+  @Override
+  public final byte[][] families() {
+    return families;
   }
 
   @Override

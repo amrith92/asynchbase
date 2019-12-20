@@ -102,6 +102,14 @@ public abstract class HBaseRpc {
      * @return the family this RPC is for.
      */
     public byte[] family();
+
+    /**
+     * Returns all families for this RPC.
+     * <p>
+     * <strong>DO NOT MODIFY THE CONTENTS OF THE ARRAY RETURNED.</strong>
+     * @return all the families this RPC is for
+     */
+    public byte[][] families();
   }
 
   /**
