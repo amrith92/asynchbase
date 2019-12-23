@@ -774,7 +774,7 @@ public abstract class HBaseRpc {
                                       final byte[][] qualifiers) {
     return toStringWithQualifiers(classname, family, qualifiers, null, "");
   }
-  
+
   /**
    * Helper for subclass's {@link #toString} implementations.
    * <p>
@@ -791,19 +791,44 @@ public abstract class HBaseRpc {
                                       final byte[][] qualifiers,
                                       final byte[][] values,
                                       final String fields) {
+      return this.toStringWithQualifiers(classname, new byte[][] { family }, new byte[][][] { qualifiers }, new byte[][][] { values }, fields);
+  }
+  
+  /**
+   * Helper for subclass's {@link #toString} implementations.
+   * <p>
+   * This is used by subclasses such as {@link DeleteRequest}
+   * or {@link GetRequest}, to avoid code duplication.
+   * @param classname The name of the class of the caller.
+   * @param families A possibly null family name.
+   * @param qualifiers A non-empty list of qualifiers or null.
+   * @param values A non-empty list of values or null.
+   * @param fields Additional fields to include in the output.
+   */
+  final String toStringWithQualifiers(final String classname,
+                                      final byte[][] families,
+                                      final byte[][][] qualifiers,
+                                      final byte[][][] values,
+                                      final String fields) {
     final StringBuilder buf = new StringBuilder(256  // min=182
                                                 + fields.length());
     buf.append(classname).append("(table=");
     Bytes.pretty(buf, table);
     buf.append(", key=");
     Bytes.pretty(buf, key);
-    buf.append(", family=");
-    Bytes.pretty(buf, family);
-    buf.append(", qualifiers=");
-    Bytes.pretty(buf, qualifiers);
-    if (values != null) {
-      buf.append(", values=");
-      Bytes.pretty(buf, values);
+    for (int family_idx = 0; family_idx < families.length; ++family_idx) {
+        final byte[] family = families[family_idx];
+        final byte[][] qualifier = qualifiers[family_idx];
+        final byte[][] value = values[family_idx];
+        buf.append(", { family=");
+        Bytes.pretty(buf, family);
+        buf.append(", qualifiers=");
+        Bytes.pretty(buf, qualifier);
+        if (values != null) {
+            buf.append(", values=");
+            Bytes.pretty(buf, value);
+        }
+        buf.append("}");
     }
     buf.append(fields);
     buf.append(", attempt=").append(attempt)
