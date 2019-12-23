@@ -69,7 +69,7 @@ final class CompareAndSetRequest extends HBaseRpc
   /**
    * Constructor.
    * @param put Put request to execute if value matches.
-   * @param value The expected value to compare against.
+   * @param expected The expected value to compare against.
    * <strong>This byte array will NOT be copied.</strong>
    */
   public CompareAndSetRequest(final PutRequest put,
@@ -100,6 +100,11 @@ final class CompareAndSetRequest extends HBaseRpc
   @Override
   public byte[] family() {
     return put.family();
+  }
+
+  @Override
+  public byte[][] families() {
+      return put.families();
   }
 
   @Override
