@@ -334,7 +334,7 @@ public final class AppendRequest extends BatchableRpc
   private AppendRequest(final byte[] table,
                      final KeyValue kv,
                      final long lockid) {
-    super(table, kv.key(), kv.family(), kv.timestamp(), lockid);
+    super(table, kv.key(), new byte[][] { kv.family() }, kv.timestamp(), lockid);
     this.qualifiers = new byte[][] { kv.qualifier() };
     this.values = new byte[][] { kv.value() };
   }
@@ -360,7 +360,7 @@ public final class AppendRequest extends BatchableRpc
                      final long timestamp,
                      final long lockid,
                      final boolean return_result) {
-    super(table, key, family, timestamp, lockid);
+    super(table, key, new byte[][] { family }, timestamp, lockid);
     KeyValue.checkFamily(family);
     
     if (qualifiers.length != values.length) {
@@ -431,7 +431,7 @@ public final class AppendRequest extends BatchableRpc
   
   public String toString() {
     return super.toStringWithQualifiers("AppendRequest",
-                                       family, qualifiers, values,
+                                       family(), qualifiers, values,
                                        ", timestamp=" + timestamp
                                        + ", lockid=" + lockid
                                        + ", durable=" + durable
@@ -480,7 +480,7 @@ public final class AppendRequest extends BatchableRpc
   int payloadSize() {
     int size = 0;
     for (int i = 0; i < qualifiers.length; i++) {
-      size += KeyValue.predictSerializedSize(key, family, qualifiers[i], values[i]);
+      size += KeyValue.predictSerializedSize(key, family(), qualifiers[i], values[i]);
     }
     return size;
   }
@@ -489,7 +489,7 @@ public final class AppendRequest extends BatchableRpc
   void serializePayload(final ChannelBuffer buf) {
     for (int i = 0; i < qualifiers.length; i++) {
       //HBASE KeyValue (org.apache.hadoop.hbase.KeyValue) doesn't have an Append Type
-      KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, family,
+      KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, family(),
                          qualifiers[i], values[i]);
     }
   }
@@ -532,7 +532,7 @@ public final class AppendRequest extends BatchableRpc
     size += 4;  // int:  Number of families for which we have edits.
 
     size += 1;  // vint: Family length (guaranteed on 1 byte).
-    size += family.length;  // The family.
+    size += family().length;  // The family.
     size += 4;  // int:  Number of KeyValues that follow.
     size += 4;  // int:  Total number of bytes for all those KeyValues.
 
@@ -545,7 +545,7 @@ public final class AppendRequest extends BatchableRpc
   MutationProto toMutationProto() {
     final MutationProto.ColumnValue.Builder columns =  // All columns ...
       MutationProto.ColumnValue.newBuilder()
-      .setFamily(Bytes.wrap(family));                  // ... for this family.
+      .setFamily(Bytes.wrap(family()));                  // ... for this family.
 
     // Now add all the qualifier-value pairs.
     for (int i = 0; i < qualifiers.length; i++) {
@@ -618,7 +618,7 @@ public final class AppendRequest extends BatchableRpc
     buf.writeByte(durable ? 0x01 : 0x00);  // Whether or not to use the WAL.
 
     buf.writeInt(1);  // Number of families that follow.
-    writeByteArray(buf, family);  // The column family.
+    writeByteArray(buf, family());  // The column family.
 
     buf.writeInt(qualifiers.length);  // Number of "KeyValues" that follow.
     buf.writeInt(payloadSize());  // Size of the KV that follows.
