@@ -132,6 +132,14 @@ abstract class BatchableRpc extends HBaseRpc
     return families == null ? null : families[0];
   }
 
+  protected void setFamily(final byte[] family) {
+      this.families = new byte[][] { family };
+  }
+
+  protected void setFamilies(final byte[][] families) {
+      this.families = families;
+  }
+
   @Override
   public final byte[][] families() {
     return families;

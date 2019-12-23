@@ -232,7 +232,7 @@ public final class GetRequest extends BatchableRpc
    */
   public GetRequest family(final byte[] family) {
     KeyValue.checkFamily(family);
-    this.family = family;
+    this.setFamily(family);
     return this;
   }
 
@@ -471,9 +471,9 @@ public final class GetRequest extends BatchableRpc
       final String filter = this.filter.toString();
       final StringBuilder buf = new StringBuilder(9 + 1 + filter.length() + 1)
         .append(", filter=").append(filter);
-      return super.toStringWithQualifiers(klass, family, qualifiers, null, buf.toString());
+      return super.toStringWithQualifiers(klass, family(), qualifiers, null, buf.toString());
     } else {
-      return super.toStringWithQualifiers(klass, family, qualifiers);
+      return super.toStringWithQualifiers(klass, family(), qualifiers);
     }
   }
 
@@ -513,9 +513,9 @@ public final class GetRequest extends BatchableRpc
     size += 8;  // long: Maximum timestamp.
     size += 1;  // byte: Boolean: "all time".
     size += 4;  // int:  Number of families.
-    if (family != null) {
+    if (family() != null) {
       size += 1;  // vint: Family length (guaranteed on 1 byte).
-      size += family.length;  // The family.
+      size += family().length;  // The family.
       size += 1;  // byte: Boolean: do we want specific qualifiers?
       if (qualifiers != null) {
         size += 4;  // int:  How many qualifiers follow?
@@ -555,11 +555,11 @@ public final class GetRequest extends BatchableRpc
     // all possible times.  Not sure why it's part of the serialized RPC...
 
     // Families.
-    buf.writeInt(family != null ? 1 : 0);  // Number of families that follow.
+    buf.writeInt(family() != null ? 1 : 0);  // Number of families that follow.
 
-    if (family != null) {
+    if (family() != null) {
       // Each family is then written like so:
-      writeByteArray(buf, family);  // Column family name.
+      writeByteArray(buf, family());  // Column family name.
       if (qualifiers != null) {
         buf.writeByte(0x01);  // Boolean: We want specific qualifiers.
         buf.writeInt(qualifiers.length);   // How many qualifiers do we want?
@@ -597,9 +597,9 @@ public final class GetRequest extends BatchableRpc
     final ClientPB.Get.Builder getpb = ClientPB.Get.newBuilder()
       .setRow(Bytes.wrap(key));
 
-    if (family != null) {
+    if (family() != null) {
       final ClientPB.Column.Builder column = ClientPB.Column.newBuilder();
-      column.setFamily(Bytes.wrap(family));
+      column.setFamily(Bytes.wrap(family()));
       if (qualifiers != null) {
         for (final byte[] qualifier : qualifiers) {
           column.addQualifier(Bytes.wrap(qualifier));
@@ -681,11 +681,11 @@ public final class GetRequest extends BatchableRpc
     // all possible times.  Not sure why it's part of the serialized RPC...
 
     // Families.
-    buf.writeInt(family != null ? 1 : 0);  // Number of families that follow.
+    buf.writeInt(family() != null ? 1 : 0);  // Number of families that follow.
 
-    if (family != null) {
+    if (family() != null) {
       // Each family is then written like so:
-      writeByteArray(buf, family);  // Column family name.
+      writeByteArray(buf, family());  // Column family name.
       if (qualifiers != null) {
         buf.writeByte(0x01);  // Boolean: We want specific qualifiers.
         buf.writeInt(qualifiers.length);   // How many qualifiers do we want?
@@ -765,7 +765,7 @@ public final class GetRequest extends BatchableRpc
   /**
    * Converts a protobuf result into a list of {@link KeyValue} and parses a
    * list of cells.
-   * @param The protobuf'ed results from which to extract the KVs.
+   * @param res The protobuf'ed results from which to extract the KVs.
    * @param buf The buffer from which the protobuf was read.
    * @param cell_size The number of bytes of the cell block that follows,
    * in the buffer.
