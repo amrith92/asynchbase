@@ -206,6 +206,11 @@ public final class MultiColumnAtomicIncrementRequest extends HBaseRpc
   }
 
   @Override
+  public byte[][] families() {
+      return new byte[][] { family };
+  }
+
+  @Override
   public byte[][] qualifiers() {
     return qualifiers;
   }
