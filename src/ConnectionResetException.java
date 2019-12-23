@@ -37,7 +37,7 @@ public final class ConnectionResetException extends RecoverableException {
 
   /**
    * Constructor.
-   * @param table The table that wasn't found.
+   * @param chan The table that wasn't found.
    */
   ConnectionResetException(final Channel chan) {
     super(chan + " got disconnected");
