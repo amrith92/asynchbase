@@ -576,11 +576,6 @@ public final class PutRequest extends BatchableRpc
     size += 1;  // bool: Whether or not to write to the WAL.
     size += 4;  // int:  Number of families for which we have edits.
 
-    size += 1;  // vint: Family length (guaranteed on 1 byte).
-    size += family().length;  // The family.
-    size += 4;  // int:  Number of KeyValues that follow.
-    size += 4;  // int:  Total number of bytes for all those KeyValues.
-
     size += payloadSize();
 
     return size;
