@@ -518,18 +518,29 @@ public final class PutRequest extends BatchableRpc
       size += families[i].length;
       size += 4; // the number of KVs that follow
       size += 4; // the total number of bytes for all those KVs
-      for (int j = 0; j < qualifiers[i].length; j++) {
-        size += KeyValue.predictSerializedSize(key, families[i], qualifiers[i][j], values[i][j]);
-      }
+      size += qualifierValueSize(i);
+    }
+    return size;
+  }
+
+  private int qualifierValueSize(int family) {
+    int size = 0;
+    for (int j = 0; j < qualifiers[family].length; j++) {
+      size += KeyValue.predictSerializedSize(key, families[family], qualifiers[family][j], values[family][j]);
     }
     return size;
   }
 
   @Override
   void serializePayload(final ChannelBuffer buf) {
-    for (int i = 0; i < qualifiers.length; i++) {
-      KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, family(),
-                         qualifiers[0][i], values[0][i]);
+    for (int i = 0; i < families.length; i++) {
+      writeByteArray(buf, families[i]);
+      buf.writeInt(qualifiers[i].length);
+      buf.writeInt(qualifierValueSize(i));
+      for (int j = 0; j < qualifiers.length; j++) {
+        KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[i],
+            qualifiers[i][j], values[i][j]);
+      }
     }
   }
 
