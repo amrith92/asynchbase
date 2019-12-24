@@ -187,6 +187,27 @@ public final class PutRequest extends BatchableRpc
   }
 
   /**
+   * Constructor for multiple columns with a specific timestamp.
+   * <strong>These byte arrays will NOT be copied.</strong>
+   * @param table The table to edit.
+   * @param key The key of the row to edit in that table.
+   * @param families The column families to edit in that table.
+   * @param qualifiers The column qualifiers to edit in those families.
+   * @param values The corresponding values to store.
+   * @param timestamp The timestamp to set on this edit.
+   * @throws IllegalArgumentException if {@code qualifiers.length == 0}
+   * or if {@code qualifiers.length != values.length}
+   */
+  public PutRequest(final byte[] table,
+                    final byte[] key,
+                    final byte[][] families,
+                    final byte[][][] qualifiers,
+                    final byte[][][] values,
+                    final long timestamp) {
+      this(table, key, families, qualifiers, values, timestamp, RowLock.NO_LOCK);
+  }
+
+  /**
    * Constructor using an explicit row lock.
    * <strong>These byte arrays will NOT be copied.</strong>
    * <p>
@@ -353,7 +374,9 @@ public final class PutRequest extends BatchableRpc
          timestamp, lockid);
   }
 
-  /** Private constructor.  */
+  /**
+   * Private constructor.
+   */
   private PutRequest(final byte[] table,
                      final byte[] key,
                      final byte[] family,
@@ -361,20 +384,41 @@ public final class PutRequest extends BatchableRpc
                      final byte[][] values,
                      final long timestamp,
                      final long lockid) {
-    super(table, key, new byte[][] { family }, timestamp, lockid);
-    KeyValue.checkFamily(family);
-    if (qualifiers.length != values.length) {
-      throw new IllegalArgumentException("Have " + qualifiers.length
-        + " qualifiers and " + values.length + " values.  Should be equal.");
-    } else if (qualifiers.length == 0) {
-      throw new IllegalArgumentException("Need at least one qualifier/value.");
+    this(table, key, new byte[][] { family }, new byte[][][] { qualifiers }, new byte[][][] { values }, timestamp, lockid);
+  }
+
+  /** Private constructor.  */
+  private PutRequest(final byte[] table,
+                     final byte[] key,
+                     final byte[][] families,
+                     final byte[][][] family_qualifiers,
+                     final byte[][][] family_values,
+                     final long timestamp,
+                     final long lockid) {
+    super(table, key, families, timestamp, lockid);
+    if (families.length < 1) {
+      throw new IllegalArgumentException("Must specify at least one column family.");
     }
-    for (int i = 0; i < qualifiers.length; i++) {
-      KeyValue.checkQualifier(qualifiers[i]);
-      KeyValue.checkValue(values[i]);
+    for (int i = 0; i < families.length; i++) {
+      final byte[] family = families[i];
+      final byte[][] qualifiers = family_qualifiers[i];
+      final byte[][] values = family_values[i];
+
+      KeyValue.checkFamily(family);
+
+      if (qualifiers.length != values.length) {
+        throw new IllegalArgumentException("Have " + qualifiers.length
+                    + " qualifiers and " + values.length + " values.  Should be equal.");
+      } else if (qualifiers.length == 0) {
+          throw new IllegalArgumentException("Need at least one qualifier/value.");
+        }
+      for (int j = 0; j < qualifiers.length; j++) {
+        KeyValue.checkQualifier(qualifiers[j]);
+        KeyValue.checkValue(values[j]);
+      }
     }
-    this.qualifiers = new byte[][][] { qualifiers };
-    this.values = new byte[][][] { values };
+    this.qualifiers = family_qualifiers;
+    this.values = family_values;
   }
 
   @Override
