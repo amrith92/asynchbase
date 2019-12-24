@@ -659,11 +659,7 @@ public final class PutRequest extends BatchableRpc
     buf.writeLong(lockid);    // Lock ID.
     buf.writeByte(durable ? 0x01 : 0x00);  // Whether or not to use the WAL.
 
-    buf.writeInt(1);  // Number of families that follow.
-    writeByteArray(buf, family());  // The column family.
-
-    buf.writeInt(qualifiers.length);  // Number of "KeyValues" that follow.
-    buf.writeInt(payloadSize());  // Size of the KV that follows.
+    buf.writeInt(families.length);  // Number of families that follow.
     serializePayload(buf);
   }
 
