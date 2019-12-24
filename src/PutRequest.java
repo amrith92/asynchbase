@@ -584,18 +584,21 @@ public final class PutRequest extends BatchableRpc
   @Override
   MutationProto toMutationProto() {
     final MutationProto.ColumnValue.Builder columns =  // All columns ...
-      MutationProto.ColumnValue.newBuilder()
-      .setFamily(Bytes.wrap(family()));                  // ... for this family.
+      MutationProto.ColumnValue.newBuilder();
 
-    // Now add all the qualifier-value pairs.
-    for (int i = 0; i < qualifiers.length; i++) {
-      final MutationProto.ColumnValue.QualifierValue column =
-        MutationProto.ColumnValue.QualifierValue.newBuilder()
-        .setQualifier(Bytes.wrap(qualifiers[0][i]))
-        .setValue(Bytes.wrap(values[0][i]))
-        .setTimestamp(timestamp)
-        .build();
-      columns.addQualifierValue(column);
+    for (int family = 0; family < families.length; family++) {
+      columns.clear();
+      columns.setFamily(Bytes.wrap(families[family]));
+      // Now add all the qualifier-value pairs.
+      for (int i = 0; i < qualifiers[family].length; i++) {
+        final MutationProto.ColumnValue.QualifierValue column =
+            MutationProto.ColumnValue.QualifierValue.newBuilder()
+                .setQualifier(Bytes.wrap(qualifiers[family][i]))
+                .setValue(Bytes.wrap(values[family][i]))
+                .setTimestamp(timestamp)
+                .build();
+        columns.addQualifierValue(column);
+      }
     }
 
     final MutationProto.Builder put = MutationProto.newBuilder()
