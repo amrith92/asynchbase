@@ -513,8 +513,14 @@ public final class PutRequest extends BatchableRpc
   @Override
   int payloadSize() {
     int size = 0;
-    for (int i = 0; i < qualifiers.length; i++) {
-      size += KeyValue.predictSerializedSize(key, family(), qualifiers[0][i], values[0][i]);
+    for (int i = 0; i < families.length; i++) {
+      size += 1; // length of family
+      size += families[i].length;
+      size += 4; // the number of KVs that follow
+      size += 4; // the total number of bytes for all those KVs
+      for (int j = 0; j < qualifiers[i].length; j++) {
+        size += KeyValue.predictSerializedSize(key, families[i], qualifiers[i][j], values[i][j]);
+      }
     }
     return size;
   }
