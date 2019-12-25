@@ -64,9 +64,9 @@ public final class DeleteRequest extends BatchableRpc
     new byte[][] { HBaseClient.EMPTY_ARRAY };
 
   /** Special value for {@link #family} when deleting a whole row.  */
-  static final byte[] WHOLE_ROW = new byte[0];
+  static final byte[][] WHOLE_ROW = new byte[][] { HBaseClient.EMPTY_ARRAY };
 
-  private final byte[][] qualifiers;
+  private final byte[][][] qualifiers;
 
   /** Whether to delete the value only at the specified timestamp. */
   private boolean at_timestamp_only = false;
@@ -391,7 +391,7 @@ public final class DeleteRequest extends BatchableRpc
                         final byte[][] qualifiers,
                         final long timestamp,
                         final long lockid) {
-    super(table, key, new byte[][] { family == null ? WHOLE_ROW : family }, timestamp, lockid);
+    super(table, key, family == null ? WHOLE_ROW : new byte[][] { family }, timestamp, lockid);
     if (family != null) {
       KeyValue.checkFamily(family);
     }
@@ -411,11 +411,11 @@ public final class DeleteRequest extends BatchableRpc
       for (final byte[] qualifier : qualifiers) {
         KeyValue.checkQualifier(qualifier);
       }
-      this.qualifiers = qualifiers;
+      this.qualifiers = new byte[][][] { qualifiers };
     } else {
       // No specific qualifier to delete: delete the entire family.  Not that
       // if `family == null', we'll delete the whole row anyway.
-      this.qualifiers = DELETE_FAMILY_MARKER;
+      this.qualifiers = new byte[][][] { DELETE_FAMILY_MARKER };
     }
   }
 
@@ -456,12 +456,12 @@ public final class DeleteRequest extends BatchableRpc
   }
 
   @Override
-  public byte[][] qualifiers() {
+  public byte[][][] qualifiers() {
     return qualifiers;
   }
 
   public String toString() {
-    return super.toStringWithQualifiers("DeleteRequest", family(), qualifiers);
+    return super.toStringWithQualifiers("DeleteRequest", families, qualifiers);
   }
 
   // ---------------------- //
@@ -489,20 +489,24 @@ public final class DeleteRequest extends BatchableRpc
 
   @Override
   void serializePayload(final ChannelBuffer buf) {
-    if (family() == null) {
+    if (families == WHOLE_ROW) {
       return;  // No payload when deleting whole rows.
     }
-    // Are we deleting a whole family at once or just a bunch of columns?
-    final byte type = (qualifiers == DELETE_FAMILY_MARKER
-                       ? KeyValue.DELETE_FAMILY
-                       : (at_timestamp_only
-                          ? KeyValue.DELETE
-                          : KeyValue.DELETE_COLUMN));
 
-    // Write the KeyValues
-    for (final byte[] qualifier : qualifiers) {
-      KeyValue.serialize(buf, type, timestamp,
-                         key, family(), qualifier, null);
+    for (int family = 0; family < families.length; family++) {
+      writeByteArray(buf, families[family]);  // Column family name.
+      final boolean has_qualifiers = (qualifiers != null && qualifiers[family] != null);
+      final byte[][] family_qualifiers = has_qualifiers ? qualifiers[family] : DELETE_FAMILY_MARKER;
+      buf.writeInt(family_qualifiers.length);
+      // Are we deleting a whole family at once or just a bunch of columns?
+      final byte delete_column_or_cell_type = at_timestamp_only ? KeyValue.DELETE : KeyValue.DELETE_COLUMN;
+      final byte type = (!has_qualifiers ? KeyValue.DELETE_FAMILY : delete_column_or_cell_type);
+
+      // Write the KeyValues
+      for (final byte[] qualifier : family_qualifiers) {
+        KeyValue.serialize(buf, type, timestamp,
+            key, families[family], qualifier, null);
+      }
     }
   }
 
@@ -528,34 +532,35 @@ public final class DeleteRequest extends BatchableRpc
     size += 8;  // long: Timestamp.
     size += 8;  // long: Lock ID.
     size += 4;  // int:  Number of families.
-    size += 1;  // vint: Family length (guaranteed on 1 byte).
-    if (family() == null) {
-      return size;
-    }
-    size += family().length;  // The column family.
-    size += 4;  // int:  Number of KeyValues for this family.
     return size + payloadSize();
   }
 
   /** Returns the serialized size of all the {@link KeyValue}s in this RPC.  */
   @Override
   int payloadSize() {
-    if (family() == WHOLE_ROW) {
+    if (families() == WHOLE_ROW) {
       return 0;  // No payload when deleting whole rows.
     }
     int size = 0;
-    size += 4;  // int:  Total length of the whole KeyValue.
-    size += 4;  // int:  Total length of the key part of the KeyValue.
-    size += 4;  // int:  Length of the value part of the KeyValue.
-    size += 2;  // short:Length of the key.
-    size += key.length;  // The row key (again!).
-    size += 1;  // byte: Family length (again!).
-    size += family().length;  // The column family (again!).
-    size += 8;  // long: The timestamp (again!).
-    size += 1;  // byte: The type of KeyValue.
-    size *= qualifiers.length;
-    for (final byte[] qualifier : qualifiers) {
-      size += qualifier.length;  // The column qualifier.
+
+    for (int family = 0; family < families.length; family++) {
+      size += 1;  // vint: Family length (guaranteed on 1 byte).
+      size += families[family].length;  // The column family.
+      size += 4;  // int:  Number of KeyValues for this family.
+      size += 4;  // int:  Total length of the whole KeyValue.
+      size += 4;  // int:  Total length of the key part of the KeyValue.
+      size += 4;  // int:  Length of the value part of the KeyValue.
+      size += 2;  // short:Length of the key.
+      size += key.length;  // The row key (again!).
+      size += 1;  // byte: Family length (again!).
+      size += families[family].length;  // The column family (again!).
+      size += 8;  // long: The timestamp (again!).
+      size += 1;  // byte: The type of KeyValue.
+      final byte[][] family_qualifiers = (qualifiers == null || qualifiers[family] == null) ? DELETE_FAMILY_MARKER : qualifiers[family];
+      size *= family_qualifiers.length;
+      for (final byte[] qualifier : family_qualifiers) {
+        size += qualifier.length;  // The column qualifier.
+      }
     }
     return size;
   }
@@ -566,29 +571,33 @@ public final class DeleteRequest extends BatchableRpc
       .setRow(Bytes.wrap(key))
       .setMutateType(MutationProto.MutationType.DELETE);
 
-    if (family() != WHOLE_ROW) {
+    if (families != WHOLE_ROW) {
       final MutationProto.ColumnValue.Builder columns = // All columns ...
-        MutationProto.ColumnValue.newBuilder()
-        .setFamily(Bytes.wrap(family()));                 // ... for this family.
+        MutationProto.ColumnValue.newBuilder();
 
-      final MutationProto.DeleteType type =
-        (qualifiers == DELETE_FAMILY_MARKER
-         ? MutationProto.DeleteType.DELETE_FAMILY
-         : (at_timestamp_only
-            ? MutationProto.DeleteType.DELETE_ONE_VERSION
-            : MutationProto.DeleteType.DELETE_MULTIPLE_VERSIONS));
+      for (int family = 0; family < families.length; family++) {
+        columns.clear();
+        columns.setFamily(Bytes.wrap(families[family]));
 
-      // Now add all the qualifiers to delete.
-      for (int i = 0; i < qualifiers.length; i++) {
-        final MutationProto.ColumnValue.QualifierValue column =
-          MutationProto.ColumnValue.QualifierValue.newBuilder()
-          .setQualifier(Bytes.wrap(qualifiers[i]))
-          .setTimestamp(timestamp)
-          .setDeleteType(type)
-          .build();
-        columns.addQualifierValue(column);
+        if (qualifiers != null) {
+          final MutationProto.DeleteType delete_type_one_version_vs_multiple = at_timestamp_only ? MutationProto.DeleteType.DELETE_ONE_VERSION : MutationProto.DeleteType.DELETE_MULTIPLE_VERSIONS;
+          final MutationProto.DeleteType type =
+              (qualifiers[family] == null ? MutationProto.DeleteType.DELETE_FAMILY : delete_type_one_version_vs_multiple);
+          // Now add all the qualifiers to delete.
+          if (qualifiers[family] != null) {
+            for (int i = 0; i < qualifiers[family].length; i++) {
+              final MutationProto.ColumnValue.QualifierValue column =
+                  MutationProto.ColumnValue.QualifierValue.newBuilder()
+                      .setQualifier(Bytes.wrap(qualifiers[family][i]))
+                      .setTimestamp(timestamp)
+                      .setDeleteType(type)
+                      .build();
+              columns.addQualifierValue(column);
+            }
+          }
+        }
+        del.addColumnValue(columns);
       }
-      del.addColumnValue(columns);
     }
 
     if (!durable) {
@@ -628,15 +637,11 @@ public final class DeleteRequest extends BatchableRpc
     buf.writeLong(lockid);  // Lock ID.
 
     // Families.
-    if (family() == WHOLE_ROW) {
+    if (families == WHOLE_ROW) {
       buf.writeInt(0);  // Number of families that follow.
       return buf;
     }
-    buf.writeInt(1);    // Number of families that follow.
-
-    // Each family is then written like so:
-    writeByteArray(buf, family());  // Column family name.
-    buf.writeInt(qualifiers.length);  // How many KeyValues for this family?
+    buf.writeInt(families.length);    // Number of families that follow.
     serializePayload(buf);
     return buf;
   }

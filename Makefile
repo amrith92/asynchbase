@@ -63,6 +63,7 @@ PROTOBUF_GEN_DIR = $(top_builddir)/src/org/hbase/async/generated
 BUILT_SOURCES := $(asynchbase_PROTOS:protobuf/%.proto=$(PROTOBUF_GEN_DIR)/%PB.java)
 
 asynchbase_SOURCES := \
+    src/RowWriteRequestUtils.java \
 	src/AppendRequest.java	\
 	src/AtomicIncrementRequest.java	\
 	src/MultiColumnAtomicIncrementRequest.java	\

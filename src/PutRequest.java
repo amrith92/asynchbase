@@ -453,8 +453,8 @@ public final class PutRequest extends BatchableRpc
    * @since 1.3
    */
   @Override
-  public byte[][] qualifiers() {
-    return qualifiers[0];
+  public byte[][][] qualifiers() {
+    return qualifiers;
   }
 
   /**
@@ -471,8 +471,8 @@ public final class PutRequest extends BatchableRpc
    * @since 1.3
    */
   @Override
-  public byte[][] values() {
-    return values[0];
+  public byte[][][] values() {
+    return values;
   }
 
   public String toString() {
@@ -518,15 +518,7 @@ public final class PutRequest extends BatchableRpc
       size += families[i].length;
       size += 4; // the number of KVs that follow
       size += 4; // the total number of bytes for all those KVs
-      size += qualifierValueSize(i);
-    }
-    return size;
-  }
-
-  private int qualifierValueSize(int family) {
-    int size = 0;
-    for (int j = 0; j < qualifiers[family].length; j++) {
-      size += KeyValue.predictSerializedSize(key, families[family], qualifiers[family][j], values[family][j]);
+      size += RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values);
     }
     return size;
   }
@@ -536,7 +528,7 @@ public final class PutRequest extends BatchableRpc
     for (int i = 0; i < families.length; i++) {
       writeByteArray(buf, families[i]);
       buf.writeInt(qualifiers[i].length);
-      buf.writeInt(qualifierValueSize(i));
+      buf.writeInt(RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values));
       for (int j = 0; j < qualifiers.length; j++) {
         KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[i],
             qualifiers[i][j], values[i][j]);
@@ -583,23 +575,7 @@ public final class PutRequest extends BatchableRpc
 
   @Override
   MutationProto toMutationProto() {
-    final MutationProto.ColumnValue.Builder columns =  // All columns ...
-      MutationProto.ColumnValue.newBuilder();
-
-    for (int family = 0; family < families.length; family++) {
-      columns.clear();
-      columns.setFamily(Bytes.wrap(families[family]));
-      // Now add all the qualifier-value pairs.
-      for (int i = 0; i < qualifiers[family].length; i++) {
-        final MutationProto.ColumnValue.QualifierValue column =
-            MutationProto.ColumnValue.QualifierValue.newBuilder()
-                .setQualifier(Bytes.wrap(qualifiers[family][i]))
-                .setValue(Bytes.wrap(values[family][i]))
-                .setTimestamp(timestamp)
-                .build();
-        columns.addQualifierValue(column);
-      }
-    }
+    final MutationProto.ColumnValue.Builder columns = RowWriteRequestUtils.columnsFor(families, qualifiers, values, timestamp);
 
     final MutationProto.Builder put = MutationProto.newBuilder()
       .setRow(Bytes.wrap(key))

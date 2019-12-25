@@ -145,15 +145,17 @@ final class BatchGet extends HBaseRpc {
       final ClientPB.Get.Builder getpb = ClientPB.Get.newBuilder()
           .setRow(Bytes.wrap(rpc.key()));
 
-      if (rpc.family() != null) {
-        final ClientPB.Column.Builder column = ClientPB.Column.newBuilder();
-        column.setFamily(Bytes.wrap(rpc.family()));
-        if (rpc.qualifiers() != null) {
-          for (final byte[] qualifier : rpc.qualifiers()) {
-            column.addQualifier(Bytes.wrap(qualifier));
+      if (rpc.families() != null) {
+        for (int family = 0; family < rpc.families().length; family++) {
+          final ClientPB.Column.Builder column = ClientPB.Column.newBuilder();
+          column.setFamily(Bytes.wrap(rpc.families()[family]));
+          if (rpc.qualifiers() != null && rpc.qualifiers()[family] != null) {
+            for (final byte[] qualifier : rpc.qualifiers()[family]) {
+              column.addQualifier(Bytes.wrap(qualifier));
+            }
           }
+          getpb.addColumn(column.build());
         }
-        getpb.addColumn(column.build());
       }
 
       // Filters

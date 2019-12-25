@@ -93,8 +93,8 @@ public final class AppendRequest extends BatchableRpc
    *   - qualifiers.length == values.length
    *   - qualifiers.length > 0
    */
-  private final byte[][] qualifiers;
-  private final byte[][] values;
+  private final byte[][][] qualifiers;
+  private final byte[][][] values;
   
   /** Whether or not to return the result of the append request */
   private boolean return_result = false;
@@ -335,8 +335,8 @@ public final class AppendRequest extends BatchableRpc
                      final KeyValue kv,
                      final long lockid) {
     super(table, kv.key(), new byte[][] { kv.family() }, kv.timestamp(), lockid);
-    this.qualifiers = new byte[][] { kv.qualifier() };
-    this.values = new byte[][] { kv.value() };
+    this.qualifiers = new byte[][][] { new byte[][] { kv.qualifier() } };
+    this.values = new byte[][][] { new byte[][] { kv.value() } };
   }
 
   /** Private constructor.  */
@@ -373,8 +373,8 @@ public final class AppendRequest extends BatchableRpc
       KeyValue.checkQualifier(qualifiers[i]);
       KeyValue.checkValue(values[i]);
     }
-    this.qualifiers = qualifiers;
-    this.values = values;
+    this.qualifiers = new byte[][][] { qualifiers };
+    this.values = new byte[][][] { values };
   }
 
   @Override
@@ -401,14 +401,14 @@ public final class AppendRequest extends BatchableRpc
    */
   @Override
   public byte[] qualifier() {
-    return qualifiers[0];
+    return qualifiers[0][0];
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public byte[][] qualifiers() {
+  public byte[][][] qualifiers() {
     return qualifiers;
   }
 
@@ -418,20 +418,20 @@ public final class AppendRequest extends BatchableRpc
    */
   @Override
   public byte[] value() {
-    return values[0];
+    return values[0][0];
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public byte[][] values() {
+  public byte[][][] values() {
     return values;
   }
   
   public String toString() {
     return super.toStringWithQualifiers("AppendRequest",
-                                       family(), qualifiers, values,
+                                       families, qualifiers, values,
                                        ", timestamp=" + timestamp
                                        + ", lockid=" + lockid
                                        + ", durable=" + durable
@@ -479,18 +479,27 @@ public final class AppendRequest extends BatchableRpc
   @Override
   int payloadSize() {
     int size = 0;
-    for (int i = 0; i < qualifiers.length; i++) {
-      size += KeyValue.predictSerializedSize(key, family(), qualifiers[i], values[i]);
+    for (int family = 0; family < families.length; family++) {
+      size += 1;  // vint: Family length (guaranteed on 1 byte).
+      size += families[family].length;  // The family.
+      size += 4;  // int:  Number of KeyValues that follow.
+      size += 4;  // int:  Total number of bytes for all those KeyValues.
+      size += RowWriteRequestUtils.qualifierValueSize(key, family, families, qualifiers, values);
     }
     return size;
   }
 
   @Override
   void serializePayload(final ChannelBuffer buf) {
-    for (int i = 0; i < qualifiers.length; i++) {
-      //HBASE KeyValue (org.apache.hadoop.hbase.KeyValue) doesn't have an Append Type
-      KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, family(),
-                         qualifiers[i], values[i]);
+    for (int family = 0; family < families.length; family++) {
+      writeByteArray(buf, families[family]);  // The column family.
+      buf.writeInt(qualifiers[family].length);  // Number of "KeyValues" that follow.
+      buf.writeInt(RowWriteRequestUtils.qualifierValueSize(key, family, families, qualifiers, values));  // Size of the KV that follows.
+      for (int i = 0; i < qualifiers[family].length; i++) {
+        //HBASE KeyValue (org.apache.hadoop.hbase.KeyValue) doesn't have an Append Type
+        KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[family],
+            qualifiers[family][i], values[family][i]);
+      }
     }
   }
 
@@ -531,11 +540,6 @@ public final class AppendRequest extends BatchableRpc
     size += 1;  // bool: Whether or not to write to the WAL.
     size += 4;  // int:  Number of families for which we have edits.
 
-    size += 1;  // vint: Family length (guaranteed on 1 byte).
-    size += family().length;  // The family.
-    size += 4;  // int:  Number of KeyValues that follow.
-    size += 4;  // int:  Total number of bytes for all those KeyValues.
-
     size += payloadSize();
 
     return size;
@@ -543,20 +547,7 @@ public final class AppendRequest extends BatchableRpc
 
   @Override
   MutationProto toMutationProto() {
-    final MutationProto.ColumnValue.Builder columns =  // All columns ...
-      MutationProto.ColumnValue.newBuilder()
-      .setFamily(Bytes.wrap(family()));                  // ... for this family.
-
-    // Now add all the qualifier-value pairs.
-    for (int i = 0; i < qualifiers.length; i++) {
-      final MutationProto.ColumnValue.QualifierValue column =
-        MutationProto.ColumnValue.QualifierValue.newBuilder()
-        .setQualifier(Bytes.wrap(qualifiers[i]))
-        .setValue(Bytes.wrap(values[i]))
-        .setTimestamp(timestamp)
-        .build();
-      columns.addQualifierValue(column);
-    }
+    final MutationProto.ColumnValue.Builder columns =  RowWriteRequestUtils.columnsFor(families, qualifiers, values, timestamp);
 
     final MutationProto.Builder append = MutationProto.newBuilder()
       .setRow(Bytes.wrap(key))
@@ -617,11 +608,8 @@ public final class AppendRequest extends BatchableRpc
     buf.writeLong(lockid);    // Lock ID.
     buf.writeByte(durable ? 0x01 : 0x00);  // Whether or not to use the WAL.
 
-    buf.writeInt(1);  // Number of families that follow.
-    writeByteArray(buf, family());  // The column family.
+    buf.writeInt(families.length);  // Number of families that follow.
 
-    buf.writeInt(qualifiers.length);  // Number of "KeyValues" that follow.
-    buf.writeInt(payloadSize());  // Size of the KV that follows.
     serializePayload(buf);
     buf.writeInt(1);    // Set one attribute
     buf.writeInt(4);    // Set attribute name length

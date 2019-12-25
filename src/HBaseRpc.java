@@ -137,7 +137,7 @@ public abstract class HBaseRpc {
      * <strong>DO NOT MODIFY THE CONTENTS OF THE ARRAY RETURNED.</strong>
      * @return the column qualifiers this RPC is for.
      */
-    public byte[][] qualifiers();
+    public byte[][][] qualifiers();
   }
 
   /**
@@ -165,7 +165,7 @@ public abstract class HBaseRpc {
      * <strong>DO NOT MODIFY THE CONTENTS OF THE ARRAY RETURNED.</strong>
      * @return the values contained in this RPC.
      */
-    public byte[][] values();
+    public byte[][][] values();
   }
 
   /**

@@ -461,8 +461,8 @@ public final class GetRequest extends BatchableRpc
   }
   
   @Override
-  public byte[][] qualifiers() {
-    return qualifiers[0];
+  public byte[][][] qualifiers() {
+    return qualifiers;
   }
 
   public String toString() {

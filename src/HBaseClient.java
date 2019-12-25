@@ -1747,7 +1747,7 @@ public final class HBaseClient {
     }
 
     final BufferedMultiColumnIncrement incr = new BufferedMultiColumnIncrement(request.table(), request.key(), request.family(),
-                            request.qualifiers());
+                            request.qualifiers()[0]);
 
     do {
       BufferedMultiColumnIncrement.Amounts amounts;

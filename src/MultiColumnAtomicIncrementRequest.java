@@ -66,8 +66,8 @@ public final class MultiColumnAtomicIncrementRequest extends HBaseRpc
 
   private static final Joiner AMOUNT_JOINER = Joiner.on(",");
 
-  private final byte[] family;
-  private final byte[][] qualifiers;
+  private final byte[][] families;
+  private final byte[][][] qualifiers;
   private long[] amounts;
   private boolean durable = true;
 
@@ -88,7 +88,7 @@ public final class MultiColumnAtomicIncrementRequest extends HBaseRpc
                                            final long[] amounts) {
     super(table, key);
     KeyValue.checkFamily(family);
-    this.family = family;
+    this.families = new byte[][] { family };
 
     if (qualifiers == null || qualifiers.length == 0) {
       throw new IllegalArgumentException("qualifiers must be provided for MultiColumnAtomicIncrementRequest");
@@ -96,7 +96,7 @@ public final class MultiColumnAtomicIncrementRequest extends HBaseRpc
     for (byte[] qualifier : qualifiers) {
       KeyValue.checkQualifier(qualifier);
     }
-    this.qualifiers = qualifiers;
+    this.qualifiers = new byte[][][] { qualifiers };
 
     if (amounts != null) {
       if (amounts.length == 0) {
@@ -202,22 +202,22 @@ public final class MultiColumnAtomicIncrementRequest extends HBaseRpc
 
   @Override
   public byte[] family() {
-    return family;
+    return families[0];
   }
 
   @Override
   public byte[][] families() {
-      return new byte[][] { family };
+      return families;
   }
 
   @Override
-  public byte[][] qualifiers() {
+  public byte[][][] qualifiers() {
     return qualifiers;
   }
 
   public String toString() {
     return super.toStringWithQualifiers("MultiColumnAtomicIncrementRequest",
-        family, qualifiers, null, ", amounts=" + AMOUNT_JOINER.join(Arrays.asList(amounts)));
+        families, qualifiers, null, ", amounts=" + AMOUNT_JOINER.join(Arrays.asList(amounts)));
   }
 
   // ---------------------- //
@@ -242,12 +242,14 @@ public final class MultiColumnAtomicIncrementRequest extends HBaseRpc
     size += 3;  // vint: row key length (3 bytes => max length = 32768).
     size += key.length;  // The row key.
     size += 1;  // byte: Type of the 3rd parameter.
-    size += 1;  // vint: Family length (guaranteed on 1 byte).
-    size += family.length;  // The family.
-    size += 1;  // byte: Type of the 4th parameter.
-    size += 3;  // vint: Qualifier length.
-    for(byte[] qualifier : qualifiers) {
-      size += qualifier.length;  // The qualifier.
+    for (int family = 0; family < families.length; family++) {
+      size += 1;  // vint: Family length (guaranteed on 1 byte).
+      size += families[family].length;  // The family.
+      size += 1;  // byte: Type of the 4th parameter.
+      size += 3;  // vint: Qualifier length.
+      for(byte[] qualifier : qualifiers[family]) {
+        size += qualifier.length;  // The qualifier.
+      }
     }
     size += 1;  // byte: Type of the 5th parameter.
     size += 8 * amounts.length;  // long: Amount.
@@ -265,18 +267,20 @@ public final class MultiColumnAtomicIncrementRequest extends HBaseRpc
       .setRow(Bytes.wrap(key))
       .setMutateType(MutationProto.MutationType.INCREMENT);
 
-    for (int i = 0; i < qualifiers.length; i++) {
-      final MutationProto.ColumnValue.QualifierValue qualifier =
-        MutationProto.ColumnValue.QualifierValue.newBuilder()
-        .setQualifier(Bytes.wrap(this.qualifiers[i]))
-        .setValue(Bytes.wrap(Bytes.fromLong(this.amounts[i])))
-        .build();
-      final MutationProto.ColumnValue column =
-        MutationProto.ColumnValue.newBuilder()
-        .setFamily(Bytes.wrap(family))
-        .addQualifierValue(qualifier)
-        .build();
-      incr.addColumnValue(column);
+    for (int family = 0; family < families.length; family++) {
+      for (int i = 0; i < qualifiers[family].length; i++) {
+        final MutationProto.ColumnValue.QualifierValue qualifier =
+            MutationProto.ColumnValue.QualifierValue.newBuilder()
+                .setQualifier(Bytes.wrap(this.qualifiers[family][i]))
+                .setValue(Bytes.wrap(Bytes.fromLong(this.amounts[i])))
+                .build();
+        final MutationProto.ColumnValue column =
+            MutationProto.ColumnValue.newBuilder()
+                .setFamily(Bytes.wrap(families[family]))
+                .addQualifierValue(qualifier)
+                .build();
+        incr.addColumnValue(column);
+      }
     }
 
     if (!durable) {
