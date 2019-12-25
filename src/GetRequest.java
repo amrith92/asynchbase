@@ -52,7 +52,7 @@ public final class GetRequest extends BatchableRpc
   private static final byte[] EXISTS =
     new byte[] { 'e', 'x', 'i', 's', 't', 's' };
 
-  private byte[][] qualifiers;
+  private byte[][][] qualifiers;
   private long lockid = RowLock.NO_LOCK;
   private boolean populate_blockcache = true;
 
@@ -252,7 +252,7 @@ public final class GetRequest extends BatchableRpc
       throw new NullPointerException("qualifier");
     }
     KeyValue.checkQualifier(qualifier);
-    this.qualifiers = new byte[][] { qualifier };
+    this.qualifiers = new byte[][][] { new byte[][] { qualifier } };
     return this;
   }
 
@@ -270,7 +270,7 @@ public final class GetRequest extends BatchableRpc
     for (final byte[] qualifier : qualifiers) {
       KeyValue.checkQualifier(qualifier);
     }
-    this.qualifiers = qualifiers;
+    this.qualifiers = new byte[][][] { qualifiers };
     return this;
   }
 
@@ -462,7 +462,7 @@ public final class GetRequest extends BatchableRpc
   
   @Override
   public byte[][] qualifiers() {
-    return qualifiers;
+    return qualifiers[0];
   }
 
   public String toString() {
@@ -471,9 +471,9 @@ public final class GetRequest extends BatchableRpc
       final String filter = this.filter.toString();
       final StringBuilder buf = new StringBuilder(9 + 1 + filter.length() + 1)
         .append(", filter=").append(filter);
-      return super.toStringWithQualifiers(klass, family(), qualifiers, null, buf.toString());
+      return super.toStringWithQualifiers(klass, families, qualifiers, null, buf.toString());
     } else {
-      return super.toStringWithQualifiers(klass, family(), qualifiers);
+      return super.toStringWithQualifiers(klass, families, qualifiers);
     }
   }
 
@@ -513,15 +513,17 @@ public final class GetRequest extends BatchableRpc
     size += 8;  // long: Maximum timestamp.
     size += 1;  // byte: Boolean: "all time".
     size += 4;  // int:  Number of families.
-    if (family() != null) {
-      size += 1;  // vint: Family length (guaranteed on 1 byte).
-      size += family().length;  // The family.
-      size += 1;  // byte: Boolean: do we want specific qualifiers?
-      if (qualifiers != null) {
-        size += 4;  // int:  How many qualifiers follow?
-        for (final byte[] qualifier : qualifiers) {
-          size += 3;  // vint: Qualifier length.
-          size += qualifier.length;  // The qualifier.
+    if (families != null) {
+      for (int family = 0; family < families.length; family++) {
+        size += 1;  // vint: Family length (guaranteed on 1 byte).
+        size += families[family].length;  // The family.
+        size += 1;  // byte: Boolean: do we want specific qualifiers?
+        if (qualifiers != null) {
+          size += 4;  // int:  How many qualifiers follow?
+          for (final byte[] qualifier : qualifiers[family]) {
+            size += 3;  // vint: Qualifier length.
+            size += qualifier.length;  // The qualifier.
+          }
         }
       }
     }
@@ -555,21 +557,7 @@ public final class GetRequest extends BatchableRpc
     // all possible times.  Not sure why it's part of the serialized RPC...
 
     // Families.
-    buf.writeInt(family() != null ? 1 : 0);  // Number of families that follow.
-
-    if (family() != null) {
-      // Each family is then written like so:
-      writeByteArray(buf, family());  // Column family name.
-      if (qualifiers != null) {
-        buf.writeByte(0x01);  // Boolean: We want specific qualifiers.
-        buf.writeInt(qualifiers.length);   // How many qualifiers do we want?
-        for (final byte[] qualifier : qualifiers) {
-          writeByteArray(buf, qualifier);  // Column qualifier name.
-        }
-      } else {
-        buf.writeByte(0x00);  // Boolean: we don't want specific qualifiers.
-      }
-    }
+    serializeFamilies(buf);
     if (server_version >= RegionClient.SERVER_VERSION_092_OR_ABOVE) {
       buf.writeInt(0);  // Attributes map: number of elements.
     }
@@ -597,15 +585,17 @@ public final class GetRequest extends BatchableRpc
     final ClientPB.Get.Builder getpb = ClientPB.Get.newBuilder()
       .setRow(Bytes.wrap(key));
 
-    if (family() != null) {
-      final ClientPB.Column.Builder column = ClientPB.Column.newBuilder();
-      column.setFamily(Bytes.wrap(family()));
-      if (qualifiers != null) {
-        for (final byte[] qualifier : qualifiers) {
-          column.addQualifier(Bytes.wrap(qualifier));
+    if (families != null) {
+      for (int family = 0; family < families.length; family++) {
+        final ClientPB.Column.Builder column = ClientPB.Column.newBuilder();
+        column.setFamily(Bytes.wrap(families[family]));
+        if (qualifiers != null && qualifiers[family] != null) {
+          for (final byte[] qualifier : qualifiers[family]) {
+            column.addQualifier(Bytes.wrap(qualifier));
+          }
         }
+        getpb.addColumn(column.build());
       }
-      getpb.addColumn(column.build());
     }
 
     // Filters
@@ -679,27 +669,33 @@ public final class GetRequest extends BatchableRpc
     buf.writeByte(0x01);            // Boolean: "all time".
     // The "all time" boolean indicates whether or not this time range covers
     // all possible times.  Not sure why it's part of the serialized RPC...
+    serializeFamilies(buf);
 
-    // Families.
-    buf.writeInt(family() != null ? 1 : 0);  // Number of families that follow.
-
-    if (family() != null) {
-      // Each family is then written like so:
-      writeByteArray(buf, family());  // Column family name.
-      if (qualifiers != null) {
-        buf.writeByte(0x01);  // Boolean: We want specific qualifiers.
-        buf.writeInt(qualifiers.length);   // How many qualifiers do we want?
-        for (final byte[] qualifier : qualifiers) {
-          writeByteArray(buf, qualifier);  // Column qualifier name.
-        }
-      } else {
-        buf.writeByte(0x00);  // Boolean: we don't want specific qualifiers.
-      }
-    }
     if (server_version >= RegionClient.SERVER_VERSION_092_OR_ABOVE) {
       buf.writeInt(0);  // Attributes map: number of elements.
     }
     return buf;
+  }
+
+  private void serializeFamilies(final ChannelBuffer buf) {
+    // Families.
+    buf.writeInt(families == null ? 0 : families.length);  // Number of families that follow.
+
+    if (families != null) {
+      for (int family = 0; family < families.length; family++) {
+        // Each family is then written like so:
+        writeByteArray(buf, families[family]);  // Column family name.
+        if (qualifiers != null && qualifiers[family] != null) {
+          buf.writeByte(0x01);  // Boolean: We want specific qualifiers.
+          buf.writeInt(qualifiers[family].length);   // How many qualifiers do we want?
+          for (final byte[] qualifier : qualifiers[family]) {
+            writeByteArray(buf, qualifier);  // Column qualifier name.
+          }
+        } else {
+          buf.writeByte(0x00);  // Boolean: we don't want specific qualifiers.
+        }
+      }
+    }
   }
 
   @Override

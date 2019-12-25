@@ -772,7 +772,22 @@ public abstract class HBaseRpc {
   final String toStringWithQualifiers(final String classname,
                                       final byte[] family,
                                       final byte[][] qualifiers) {
-    return toStringWithQualifiers(classname, family, qualifiers, null, "");
+    return this.toStringWithQualifiers(classname, new byte[][] { family }, new byte[][][] { qualifiers });
+  }
+
+  /**
+   * Helper for subclass's {@link #toString} implementations.
+   * <p>
+   * This is used by subclasses such as {@link DeleteRequest}
+   * or {@link GetRequest}, to avoid code duplication.
+   * @param classname The name of the class of the caller.
+   * @param families A possibly null list of family names.
+   * @param qualifiers A non-empty list of qualifiers or null.
+   */
+  final String toStringWithQualifiers(final String classname,
+                                      final byte[][] families,
+                                      final byte[][][] qualifiers) {
+    return toStringWithQualifiers(classname, families, qualifiers, null, "");
   }
 
   /**
@@ -791,7 +806,7 @@ public abstract class HBaseRpc {
                                       final byte[][] qualifiers,
                                       final byte[][] values,
                                       final String fields) {
-      return this.toStringWithQualifiers(classname, new byte[][] { family }, new byte[][][] { qualifiers }, new byte[][][] { values }, fields);
+    return this.toStringWithQualifiers(classname, new byte[][] { family }, new byte[][][] { qualifiers }, new byte[][][] { values }, fields);
   }
   
   /**
