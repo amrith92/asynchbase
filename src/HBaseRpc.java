@@ -831,19 +831,21 @@ public abstract class HBaseRpc {
     Bytes.pretty(buf, table);
     buf.append(", key=");
     Bytes.pretty(buf, key);
-    for (int family_idx = 0; family_idx < families.length; ++family_idx) {
+    if (families != null) {
+      for (int family_idx = 0; family_idx < families.length; ++family_idx) {
         final byte[] family = families[family_idx];
-        final byte[][] qualifier = qualifiers[family_idx];
-        final byte[][] value = values[family_idx];
+        final byte[][] qualifier = qualifiers == null ? null : qualifiers[family_idx];
+        final byte[][] value = values == null ? null : values[family_idx];
         buf.append(", { family=");
         Bytes.pretty(buf, family);
         buf.append(", qualifiers=");
         Bytes.pretty(buf, qualifier);
         if (values != null) {
-            buf.append(", values=");
-            Bytes.pretty(buf, value);
+          buf.append(", values=");
+          Bytes.pretty(buf, value);
         }
         buf.append("}");
+      }
     }
     buf.append(fields);
     buf.append(", attempt=").append(attempt)
