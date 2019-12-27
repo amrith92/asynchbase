@@ -636,6 +636,7 @@ public final class PutRequest extends BatchableRpc
     buf.writeByte(durable ? 0x01 : 0x00);  // Whether or not to use the WAL.
 
     buf.writeInt(families.length);  // Number of families that follow.
+    buf.writeInt(payloadSize()); // The total length
     serializePayload(buf);
   }
 
