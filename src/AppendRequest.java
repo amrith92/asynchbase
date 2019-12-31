@@ -26,6 +26,7 @@
  */
 package org.hbase.async;
 
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 
 import com.google.protobuf.ByteString;
@@ -43,13 +44,13 @@ import org.hbase.async.generated.HBasePB;
  * so that all column operations are atomic with respect to writers. However
  * reads across the row are not atomic and therefore readers may see partially
  * completed operations.
- * <p>
+ * <p></p>
  * <b>NOTE:</b> Append operations are only supported in HBase versions 0.94 and
  * later. 
- * <p>
+ * <p></p>
  * Note that the results of the append operation
  * are not returned at this time. Issue a {@link GetRequest} to fetch the results.
- * <p>
+ * <p></p>
  * <h1>A note on passing {@code byte} arrays in argument</h1>
  * None of the method that receive a {@code byte[]} in argument will copy it.
  * For more info, please refer to the documentation of {@link HBaseRpc}.
@@ -65,7 +66,7 @@ import org.hbase.async.generated.HBasePB;
  * this cell back from HBase.  When manually setting timestamps, it is thus
  * strongly recommended to use real UNIX timestamps in milliseconds, e.g.
  * from {@link System#currentTimeMillis}.
- * <p>
+ * <p></p>
  * If you want to let HBase set the timestamp on a write at the time it's
  * applied within the RegionServer, then use {@link KeyValue#TIMESTAMP_NOW}
  * as a timestamp.  The timestamp is set right before being written to the WAL
@@ -145,7 +146,7 @@ public final class AppendRequest extends BatchableRpc
                     final byte[] family,
                     final byte[][] qualifiers,
                     final byte[][] values) {
-    this(table, key, family, qualifiers, values, KeyValue.TIMESTAMP_NOW, 
+    this(table, key, new byte[][] { family }, new byte[][][] { qualifiers }, new byte[][][] { values }, KeyValue.TIMESTAMP_NOW,
         RowLock.NO_LOCK, false);
   }
 
@@ -186,7 +187,28 @@ public final class AppendRequest extends BatchableRpc
                     final byte[][] qualifiers,
                     final byte[][] values,
                     final long timestamp) {
-    this(table, key, family, qualifiers, values, timestamp, RowLock.NO_LOCK, false);
+    this(table, key, new byte[][] { family }, new byte[][][] { qualifiers }, new byte[][][] { values }, timestamp, RowLock.NO_LOCK, false);
+  }
+
+  /**
+   * Constructor for multiple columns &amp; column families with a specific timestamp.
+   * <strong>These byte arrays will NOT be copied.</strong>
+   * @param table The table to edit.
+   * @param key The key of the row to edit in that table.
+   * @param families The column families to edit in that table.
+   * @param qualifiers The column qualifiers to edit in the corresponding families.
+   * @param values The corresponding values to store.
+   * @param timestamp The timestamp to set on this edit.
+   * @throws IllegalArgumentException if {@code qualifiers.length == 0}
+   * or if {@code qualifiers.length != values.length}
+   */
+  public AppendRequest(final byte[] table,
+                       final byte[] key,
+                       final byte[][] families,
+                       final byte[][][] qualifiers,
+                       final byte[][][] values,
+                       final long timestamp) {
+    this(table, key, families, qualifiers, values, timestamp, RowLock.NO_LOCK, false);
   }
 
   /**
@@ -255,7 +277,7 @@ public final class AppendRequest extends BatchableRpc
                     final byte[][] values,
                     final long timestamp,
                     final RowLock lock) {
-    this(table, key, family, qualifiers, values, timestamp, lock.id(), false);
+    this(table, key, new byte[][] { family }, new byte[][][] { qualifiers }, new byte[][][] { values }, timestamp, lock.id(), false);
   }
 
   /**
@@ -347,34 +369,38 @@ public final class AppendRequest extends BatchableRpc
                      final byte[] value,
                      final long timestamp,
                      final long lockid) {
-    this(table, key, family, new byte[][] { qualifier }, new byte[][] { value },
+    this(table, key, new byte[][] { family }, new byte[][][] { new byte[][] { qualifier } }, new byte[][][] { new byte[][] { value } },
          timestamp, lockid, false);
   }
 
   /** Private constructor.  */
   private AppendRequest(final byte[] table,
                      final byte[] key,
-                     final byte[] family,
-                     final byte[][] qualifiers,
-                     final byte[][] values,
+                     final byte[][] families,
+                     final byte[][][] qualifiers,
+                     final byte[][][] values,
                      final long timestamp,
                      final long lockid,
                      final boolean return_result) {
-    super(table, key, new byte[][] { family }, timestamp, lockid);
-    KeyValue.checkFamily(family);
-    
-    if (qualifiers.length != values.length) {
-      throw new IllegalArgumentException("Have " + qualifiers.length
-        + " qualifiers and " + values.length + " values.  Should be equal.");
-    } else if (qualifiers.length == 0) {
-      throw new IllegalArgumentException("Need at least one qualifier/value.");
+    super(table, key, families, timestamp, lockid);
+
+    for (int i = 0; i < families.length; i++) {
+      final byte[] family = families[i];
+      KeyValue.checkFamily(family);
+
+      if (qualifiers[i].length != values[i].length) {
+        throw new IllegalArgumentException("For CF " + new String(family) + " Have " + qualifiers[i].length
+            + " qualifiers and " + values[i].length + " values.  Should be equal.");
+      } else if (qualifiers[i].length == 0) {
+        throw new IllegalArgumentException("For CF " + new String(family) + ", need at least one qualifier/value.");
+      }
+      for (int j = 0; j < qualifiers.length; j++) {
+        KeyValue.checkQualifier(qualifiers[i][j]);
+        KeyValue.checkValue(values[i][j]);
+      }
     }
-    for (int i = 0; i < qualifiers.length; i++) {
-      KeyValue.checkQualifier(qualifiers[i]);
-      KeyValue.checkValue(values[i]);
-    }
-    this.qualifiers = new byte[][][] { qualifiers };
-    this.values = new byte[][][] { values };
+    this.qualifiers = qualifiers;
+    this.values = values;
   }
 
   @Override
