@@ -541,7 +541,6 @@ public final class PutRequest extends BatchableRpc
       size += 1; // length of family
       size += families[i].length;
       size += 4; // the number of KVs that follow
-      size += 4; // the total number of bytes for all those KVs
       size += RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values);
     }
     return size;
@@ -553,7 +552,7 @@ public final class PutRequest extends BatchableRpc
       writeByteArray(buf, families[i]);
       buf.writeInt(qualifiers[i].length);
       buf.writeInt(RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values));
-      for (int j = 0; j < qualifiers.length; j++) {
+      for (int j = 0; j < qualifiers[i].length; j++) {
         KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[i],
             qualifiers[i][j], values[i][j]);
       }
@@ -660,7 +659,6 @@ public final class PutRequest extends BatchableRpc
     buf.writeByte(durable ? 0x01 : 0x00);  // Whether or not to use the WAL.
 
     buf.writeInt(families.length);  // Number of families that follow.
-    buf.writeInt(payloadSize()); // The total length
     serializePayload(buf);
   }
 
