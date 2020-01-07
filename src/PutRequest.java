@@ -280,6 +280,30 @@ public final class PutRequest extends BatchableRpc
   }
 
   /**
+   * Constructor for multiple columns with current time and explicit row lock.
+   * <strong>These byte arrays will NOT be copied.</strong>
+   * @param table The table to edit.
+   * @param key The key of the row to edit in that table.
+   * @param families The column families to edit in that table.
+   * @param qualifiers The column qualifiers to edit in the respective families.
+   * @param values The corresponding values to store.
+   * @param timestamp The timestamp to set on this edit.
+   * @param lock An explicit row lock to use with this request.
+   * @throws IllegalArgumentException if {@code qualifiers.length == 0}
+   * or if {@code qualifiers.length != values.length}
+   * @since 1.3
+   */
+  public PutRequest(final byte[] table,
+                    final byte[] key,
+                    final byte[][] families,
+                    final byte[][][] qualifiers,
+                    final byte[][][] values,
+                    final long timestamp,
+                    final RowLock lock) {
+    this(table, key, families, qualifiers, values, timestamp, lock.id());
+  }
+
+  /**
    * Convenience constructor from strings (higher overhead).
    * <p>
    * Note: If you want to set your own timestamp, use

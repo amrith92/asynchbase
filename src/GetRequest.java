@@ -159,6 +159,25 @@ public final class GetRequest extends BatchableRpc
 
   /**
    * Constructor.
+   * <strong>These byte arrays will NOT be copied.</strong>
+   * @param table The non-empty name of the table to use.
+   * @param key The row key to get in that table.
+   * @param families The column families.
+   * @param qualifiers The column qualifiers for the respective families.
+   * @since 1.5
+   */
+  public GetRequest(final byte[] table,
+                    final byte[] key,
+                    final byte[][] families,
+                    final byte[][][] qualifiers) {
+    super(table, key);
+    this.families = families;
+    this.qualifiers = qualifiers;
+    this.bufferable = false; //don't buffer get request
+  }
+
+  /**
+   * Constructor.
    * @param table The non-empty name of the table to use.
    * @param key The row key to get in that table.
    * @param family The column family.
@@ -176,14 +195,14 @@ public final class GetRequest extends BatchableRpc
   }
 
   /**
-   * Private constructor to build an "exists" RPC.
+   * Constructor to build an "exists" RPC.
    * @param unused Unused, simply used to help the compiler find this ctor.
    * @param table The non-empty name of the table to use.
    * @param key The row key to get in that table.
    */
-  private GetRequest(final float unused,
-                     final byte[] table,
-                     final byte[] key) {
+  public GetRequest(final float unused,
+                    final byte[] table,
+                    final byte[] key) {
     super(table, key);
     this.versions |= EXIST_FLAG;
     this.bufferable = false; //don't buffer get request

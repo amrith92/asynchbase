@@ -108,7 +108,7 @@ public final class DeleteRequest extends BatchableRpc
   public DeleteRequest(final byte[] table,
                        final byte[] key,
                        final byte[] family) {
-    this(table, key, family, null, KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
+    this(table, key, new byte[][] { family }, null, KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
   /**
@@ -125,7 +125,7 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[] key,
                        final byte[] family,
                        final long timestamp) {
-    this(table, key, family, null, timestamp, RowLock.NO_LOCK);
+    this(table, key, new byte[][] { family }, null, timestamp, RowLock.NO_LOCK);
   }
 
   /**
@@ -142,8 +142,8 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[] key,
                        final byte[] family,
                        final byte[] qualifier) {
-      this(table, key, family,
-           qualifier == null ? null : new byte[][] { qualifier },
+      this(table, key, new byte[][] { family },
+           qualifier == null ? null : new byte[][][] { new byte[][] { qualifier } },
            KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
@@ -164,8 +164,8 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[] family,
                        final byte[] qualifier,
                        final long timestamp) {
-      this(table, key, family,
-           qualifier == null ? null : new byte[][] { qualifier },
+      this(table, key, new byte[][] { family },
+           qualifier == null ? null : new byte[][][] { new byte[][] { qualifier } },
            timestamp, RowLock.NO_LOCK);
   }
 
@@ -183,8 +183,25 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[] key,
                        final byte[] family,
                        final byte[][] qualifiers) {
-    this(table, key, family, qualifiers,
+    this(table, key, new byte[][] { family }, new byte[][][] { qualifiers },
          KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
+  }
+
+  /**
+   * Constructor to delete a specific number of cells in a row.
+   * <strong>These byte arrays will NOT be copied.</strong>
+   * @param table The table to edit.
+   * @param key The key of the row to edit in that table.
+   * @param families The column families to edit in that table.
+   * @param qualifiers The column qualifiers to delete in the respective families.
+   * @throws IllegalArgumentException if any argument is malformed.
+   */
+  public DeleteRequest(final byte[] table,
+                       final byte[] key,
+                       final byte[][] families,
+                       final byte[][][] qualifiers) {
+    this(table, key, families, qualifiers,
+        KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
   /**
@@ -203,7 +220,7 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[] family,
                        final byte[][] qualifiers,
                        final long timestamp) {
-    this(table, key, family, qualifiers, timestamp, RowLock.NO_LOCK);
+    this(table, key, new byte[][] { family }, new byte[][][] { qualifiers }, timestamp, RowLock.NO_LOCK);
   }
 
   /**
@@ -221,8 +238,8 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[] family,
                        final byte[] qualifier,
                        final RowLock lock) {
-    this(table, key, family,
-         qualifier == null ? null : new byte[][] { qualifier },
+    this(table, key, new byte[][] { family },
+         qualifier == null ? null : new byte[][][] { new byte[][] { qualifier } },
          KeyValue.TIMESTAMP_NOW, lock.id());
   }
 
@@ -244,8 +261,8 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[] qualifier,
                        final long timestamp,
                        final RowLock lock) {
-    this(table, key, family,
-         qualifier == null ? null : new byte[][] { qualifier },
+    this(table, key, new byte[][] { family },
+         qualifier == null ? null : new byte[][][] { new byte[][] { qualifier } },
          timestamp, lock.id());
   }
 
@@ -266,7 +283,26 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[] family,
                        final byte[][] qualifiers,
                        final RowLock lock) {
-    this(table, key, family, qualifiers, KeyValue.TIMESTAMP_NOW, lock.id());
+    this(table, key, new byte[][] { family }, new byte[][][] { qualifiers }, KeyValue.TIMESTAMP_NOW, lock.id());
+  }
+
+  /**
+   * Constructor to delete a specific number of cells in a row.
+   * <strong>These byte arrays will NOT be copied.</strong>
+   * @param table The table to edit.
+   * @param key The key of the row to edit in that table.
+   * @param families The column families to edit in that table.
+   * @param qualifiers The column qualifiers to delete in the respective families.
+   * Can be {@code null}.
+   * @param lock An explicit row lock to use with this request.
+   * @throws IllegalArgumentException if any argument is malformed.
+   */
+  public DeleteRequest(final byte[] table,
+                       final byte[] key,
+                       final byte[][] families,
+                       final byte[][][] qualifiers,
+                       final RowLock lock) {
+    this(table, key, families, qualifiers, KeyValue.TIMESTAMP_NOW, lock.id());
   }
 
   /**
@@ -288,7 +324,7 @@ public final class DeleteRequest extends BatchableRpc
                        final byte[][] qualifiers,
                        final long timestamp,
                        final RowLock lock) {
-    this(table, key, family, qualifiers, timestamp, lock.id());
+    this(table, key, new byte[][] { family }, new byte[][][] { qualifiers }, timestamp, lock.id());
   }
 
   /**
@@ -313,7 +349,7 @@ public final class DeleteRequest extends BatchableRpc
   public DeleteRequest(final String table,
                        final String key,
                        final String family) {
-    this(table.getBytes(), key.getBytes(), family.getBytes(), null,
+    this(table.getBytes(), key.getBytes(), new byte[][] { family.getBytes() }, null,
          KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
@@ -330,8 +366,8 @@ public final class DeleteRequest extends BatchableRpc
                        final String key,
                        final String family,
                        final String qualifier) {
-    this(table.getBytes(), key.getBytes(), family.getBytes(),
-         qualifier == null ? null : new byte[][] { qualifier.getBytes() },
+    this(table.getBytes(), key.getBytes(), new byte[][] { family.getBytes() },
+         qualifier == null ? null : new byte[][][] { new byte[][] { qualifier.getBytes() } },
          KeyValue.TIMESTAMP_NOW, RowLock.NO_LOCK);
   }
 
@@ -350,8 +386,8 @@ public final class DeleteRequest extends BatchableRpc
                        final String family,
                        final String qualifier,
                        final RowLock lock) {
-    this(table.getBytes(), key.getBytes(), family.getBytes(),
-         qualifier == null ? null : new byte[][] { qualifier.getBytes() },
+    this(table.getBytes(), key.getBytes(), new byte[][] { family.getBytes() },
+         qualifier == null ? null : new byte[][][] { new byte[][] { qualifier.getBytes() } },
          KeyValue.TIMESTAMP_NOW, lock.id());
   }
 
@@ -364,7 +400,7 @@ public final class DeleteRequest extends BatchableRpc
    * @since 1.2
    */
   public DeleteRequest(final byte[] table, final KeyValue kv) {
-    this(table, kv.key(), kv.family(), new byte[][] { kv.qualifier() },
+    this(table, kv.key(), new byte[][] { kv.family() }, new byte[][][] { new byte[][] { kv.qualifier() } },
          kv.timestamp(), RowLock.NO_LOCK);
   }
 
@@ -380,24 +416,26 @@ public final class DeleteRequest extends BatchableRpc
   public DeleteRequest(final byte[] table,
                        final KeyValue kv,
                        final RowLock lock) {
-    this(table, kv.key(), kv.family(), new byte[][] { kv.qualifier() },
+    this(table, kv.key(), new byte[][] { kv.family() }, new byte[][][] { new byte[][] { kv.qualifier() } },
          kv.timestamp(), lock.id());
   }
 
   /** Private constructor.  */
   private DeleteRequest(final byte[] table,
                         final byte[] key,
-                        final byte[] family,
-                        final byte[][] qualifiers,
+                        final byte[][] families,
+                        final byte[][][] qualifiers,
                         final long timestamp,
                         final long lockid) {
-    super(table, key, family == null ? WHOLE_ROW : new byte[][] { family }, timestamp, lockid);
-    if (family != null) {
-      KeyValue.checkFamily(family);
+    super(table, key, families == null ? WHOLE_ROW : families, timestamp, lockid);
+    if (families != null) {
+      for (byte[] family : families) {
+        KeyValue.checkFamily(family);
+      }
     }
 
     if (qualifiers != null) {
-      if (family == null) {
+      if (families == null) {
         throw new IllegalArgumentException("You can't delete specific qualifiers"
           + " without specifying which family they belong to."
           + "  table=" + Bytes.pretty(table)
@@ -408,10 +446,12 @@ public final class DeleteRequest extends BatchableRpc
           + " qualifiers, this would delete the entire row of table="
           + Bytes.pretty(table) + " at key " + Bytes.pretty(key));
       }
-      for (final byte[] qualifier : qualifiers) {
-        KeyValue.checkQualifier(qualifier);
+      for (int familyIndex = 0; familyIndex < families.length; familyIndex++) {
+        for (final byte[] qualifier : qualifiers[familyIndex]) {
+          KeyValue.checkQualifier(qualifier);
+        }
       }
-      this.qualifiers = new byte[][][] { qualifiers };
+      this.qualifiers = qualifiers;
     } else {
       // No specific qualifier to delete: delete the entire family.  Not that
       // if `family == null', we'll delete the whole row anyway.
