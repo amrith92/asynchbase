@@ -541,6 +541,7 @@ public final class PutRequest extends BatchableRpc
       size += 1; // length of family
       size += families[i].length;
       size += 4; // the number of KVs that follow
+      size += 4; // the size of the KVs that follow
       size += RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values);
     }
     return size;
