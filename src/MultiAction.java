@@ -207,7 +207,7 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
         size += 1;  // vint: Family length (guaranteed on 1 byte).
         size += families[0].length;  // The family.
         size += 4;  // int:  Number of KeyValues that follow.
-        if (rpc.code() == PutRequest.CODE) {
+        if (rpc.code() == PutRequest.CODE || rpc.code() == AppendRequest.CODE) {
           size += 4;  // int:  Total number of bytes for all those KeyValues.
         }
       }
@@ -384,7 +384,7 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
         // Monkey-patch the number and size of edits for the previous family.
         if (nkeys_per_family_index > 0) {
           buf.setInt(nkeys_per_family_index, nkeys_per_family);
-          if (prev.code() == PutRequest.CODE) {
+          if (prev.code() == PutRequest.CODE || prev.code() == AppendRequest.CODE) {
             buf.setInt(nkeys_per_family_index + 4, nbytes_per_family);
           }
           nkeys_per_family_index = -1;
@@ -395,6 +395,12 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
         if (families == DeleteRequest.WHOLE_ROW) {
           prev = rpc;  // Short circuit.  We have no KeyValue to write.
           continue;    // So loop again directly.
+        } else if (families.length > 1) {
+          nfamilies = families.length;
+          rpc.serializePayload(buf);
+          nrpcs_per_key++;
+          prev = rpc;
+          continue;
         }
 
         nfamilies++;
@@ -403,7 +409,7 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
         nkeys_per_family_index = buf.writerIndex();
         // Number of "KeyValues" that follow.
         buf.writeInt(0);  // We'll monkey patch this later.
-        if (rpc.code() == PutRequest.CODE) {
+        if (rpc.code() == PutRequest.CODE || rpc.code() == AppendRequest.CODE) {
           // Total number of bytes taken by those "KeyValues".
           // This is completely useless and only done for `Put'.
           buf.writeInt(0);  // We'll monkey patch this later.
@@ -430,7 +436,7 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
     if (nkeys_per_family_index > 0) {
       // Monkey-patch everything for the last set of edits.
       buf.setInt(nkeys_per_family_index, nkeys_per_family);
-      if (prev.code() == PutRequest.CODE) {
+      if (prev.code() == PutRequest.CODE || prev.code() == AppendRequest.CODE) {
         buf.setInt(nkeys_per_family_index + 4, nbytes_per_family);
       }
     }

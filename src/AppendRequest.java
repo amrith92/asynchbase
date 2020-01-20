@@ -485,7 +485,7 @@ public final class AppendRequest extends BatchableRpc
     // Versions are:
     //   1: Before 0.92.0, if we're serializing a `multiPut' RPC.
     //   2: HBASE-3921 in 0.92.0 added "attributes" at the end.
-    if (server_version >= RegionClient.SERVER_VERSION_092_OR_ABOVE) {
+    if (server_version >= RegionClient.SERVER_VERSION_095_OR_ABOVE) {
       return 2;
     } else {
       return 1;
@@ -499,7 +499,7 @@ public final class AppendRequest extends BatchableRpc
 
   @Override
   int numKeyValues() {
-    return qualifiers.length;
+    return qualifiers[0].length;
   }
 
   @Override

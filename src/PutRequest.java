@@ -531,7 +531,7 @@ public final class PutRequest extends BatchableRpc
 
   @Override
   int numKeyValues() {
-    return qualifiers.length;
+    return qualifiers[0].length;
   }
 
   @Override
