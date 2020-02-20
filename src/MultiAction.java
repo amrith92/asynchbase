@@ -277,11 +277,11 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
 
     {  // 1st and only param.
       final int code = use_multi ? 66 : 57;  // `MultiAction' or `MultiPut'.
-      buf.writeByte(code);  // Type code for the parameter.
-      buf.writeByte(code);  // Type code again (see HBASE-2877).
+      buf.writeByte(code);  // Type code for the parameter.                     BYTE 28,29
+      buf.writeByte(code);  // Type code again (see HBASE-2877).                BYTE 29,30
     }
 
-    buf.writeInt(0);  // How many regions do we want to affect?
+    buf.writeInt(0);  // How many regions do we want to affect?              BYTE 30,34
     //           ^------ We'll monkey patch this at the end.
 
     int nregions = 0;

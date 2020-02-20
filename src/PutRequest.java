@@ -538,10 +538,6 @@ public final class PutRequest extends BatchableRpc
   int payloadSize() {
     int size = 0;
     for (int i = 0; i < families.length; i++) {
-      size += 1; // length of family
-      size += families[i].length;
-      size += 4; // the number of KVs that follow
-      size += 4; // the size of the KVs that follow
       size += RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values);
     }
     return size;
@@ -550,9 +546,6 @@ public final class PutRequest extends BatchableRpc
   @Override
   void serializePayload(final ChannelBuffer buf) {
     for (int i = 0; i < families.length; i++) {
-      writeByteArray(buf, families[i]);
-      buf.writeInt(qualifiers[i].length);
-      buf.writeInt(RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values));
       for (int j = 0; j < qualifiers[i].length; j++) {
         KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[i],
             qualifiers[i][j], values[i][j]);
@@ -592,7 +585,13 @@ public final class PutRequest extends BatchableRpc
     size += 1;  // bool: Whether or not to write to the WAL.
     size += 4;  // int:  Number of families for which we have edits.
 
-    size += payloadSize();
+    for (int i = 0; i < families.length; i++) {
+      size += 1; // length of family
+      size += families[i].length;
+      size += 4; // the number of KVs that follow
+      size += 4; // the size of the KVs that follow
+      size += RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values);
+    }
 
     return size;
   }
@@ -660,7 +659,15 @@ public final class PutRequest extends BatchableRpc
     buf.writeByte(durable ? 0x01 : 0x00);  // Whether or not to use the WAL.
 
     buf.writeInt(families.length);  // Number of families that follow.
-    serializePayload(buf);
+    for (int i = 0; i < families.length; i++) {
+      writeByteArray(buf, families[i]);
+      buf.writeInt(qualifiers[i].length);
+      buf.writeInt(RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values));
+      for (int j = 0; j < qualifiers[i].length; j++) {
+        KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[i],
+                qualifiers[i][j], values[i][j]);
+      }
+    }
   }
 
 }

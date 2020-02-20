@@ -506,10 +506,6 @@ public final class AppendRequest extends BatchableRpc
   int payloadSize() {
     int size = 0;
     for (int family = 0; family < families.length; family++) {
-      size += 1;  // vint: Family length (guaranteed on 1 byte).
-      size += families[family].length;  // The family.
-      size += 4;  // int:  Number of KeyValues that follow.
-      size += 4;  // int:  Total number of bytes for all those KeyValues.
       size += RowWriteRequestUtils.qualifierValueSize(key, family, families, qualifiers, values);
     }
     return size;
@@ -518,9 +514,6 @@ public final class AppendRequest extends BatchableRpc
   @Override
   void serializePayload(final ChannelBuffer buf) {
     for (int family = 0; family < families.length; family++) {
-      writeByteArray(buf, families[family]);  // The column family.
-      buf.writeInt(qualifiers[family].length);  // Number of "KeyValues" that follow.
-      buf.writeInt(RowWriteRequestUtils.qualifierValueSize(key, family, families, qualifiers, values));  // Size of the KV that follows.
       for (int i = 0; i < qualifiers[family].length; i++) {
         //HBASE KeyValue (org.apache.hadoop.hbase.KeyValue) doesn't have an Append Type
         KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[family],
@@ -566,7 +559,13 @@ public final class AppendRequest extends BatchableRpc
     size += 1;  // bool: Whether or not to write to the WAL.
     size += 4;  // int:  Number of families for which we have edits.
 
-    size += payloadSize();
+    for (int family = 0; family < families.length; family++) {
+      size += 1;  // vint: Family length (guaranteed on 1 byte).
+      size += families[family].length;  // The family.
+      size += 4;  // int:  Number of KeyValues that follow.
+      size += 4;  // int:  Total number of bytes for all those KeyValues.
+      size += RowWriteRequestUtils.qualifierValueSize(key, family, families, qualifiers, values);
+    }
 
     return size;
   }
@@ -636,7 +635,17 @@ public final class AppendRequest extends BatchableRpc
 
     buf.writeInt(families.length);  // Number of families that follow.
 
-    serializePayload(buf);
+    for (int family = 0; family < families.length; family++) {
+      writeByteArray(buf, families[family]);  // The column family.
+      buf.writeInt(qualifiers[family].length);  // Number of "KeyValues" that follow.
+      buf.writeInt(RowWriteRequestUtils.qualifierValueSize(key, family, families, qualifiers, values));  // Size of the KV that follows.
+      for (int i = 0; i < qualifiers[family].length; i++) {
+        //HBASE KeyValue (org.apache.hadoop.hbase.KeyValue) doesn't have an Append Type
+        KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[family],
+                qualifiers[family][i], values[family][i]);
+      }
+    }
+
     buf.writeInt(1);    // Set one attribute
     buf.writeInt(4);    // Set attribute name length
     buf.writeBytes(RETURN_RESULTS);
