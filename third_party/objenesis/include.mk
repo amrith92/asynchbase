@@ -25,7 +25,7 @@
 
 OBJENESIS_VERSION := 2.1
 OBJENESIS := third_party/objenesis/objenesis-$(OBJENESIS_VERSION).jar
-OBJENESIS_BASE_URL := http://central.maven.org/maven2/org/objenesis/objenesis/$(OBJENESIS_VERSION)
+OBJENESIS_BASE_URL := https://repo1.maven.org/maven2/org/objenesis/objenesis/$(OBJENESIS_VERSION)
 
 $(OBJENESIS): $(OBJENESIS).md5
 	set dummy "$(OBJENESIS_BASE_URL)" "$(OBJENESIS)"; shift; $(FETCH_DEPENDENCY)
