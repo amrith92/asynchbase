@@ -287,7 +287,7 @@ final public class TestIntegration {
     assertEq("a2", kv.key());
     assertEq(family, kv.family());
     assertEq("q", kv.qualifier());
-    assertEq("val2ndv", kv.value());
+    assertEq("2ndv", kv.value());
     final double kvts = kv.timestamp();
     assertEquals(write_time, kvts, 5000.0);  // Within five seconds.
   }
@@ -311,7 +311,7 @@ final public class TestIntegration {
     assertEq("a2", kv.key());
     assertEq(family, kv.family());
     assertEq("q", kv.qualifier());
-    assertEq("val2ndv", kv.value());
+    assertEq("2ndv", kv.value());
     final double kvts = kv.timestamp();
     assertEquals(write_time, kvts, 5000.0);  // Within five seconds.
   }

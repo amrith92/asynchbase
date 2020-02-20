@@ -889,7 +889,12 @@ final class RegionClient extends ReplayingDecoder<VoidEnum> {
               retryEdit(rpc, (RecoverableException) r);
             }
           } else {
-            rpc.callback(r);
+            // handle multi-responses
+            if (r instanceof ArrayList) {
+              rpc.callback(((ArrayList) r).get(i));
+            } else {
+              rpc.callback(r);
+            }
           }
         }
         // We're successful.  If there was a problem, the exception was
