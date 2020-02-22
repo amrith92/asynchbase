@@ -524,7 +524,7 @@ public final class DeleteRequest extends BatchableRpc
 
   @Override
   int numKeyValues() {
-    return qualifiers.length;
+    return qualifiers[0].length;
   }
 
   @Override
@@ -534,10 +534,8 @@ public final class DeleteRequest extends BatchableRpc
     }
 
     for (int family = 0; family < families.length; family++) {
-      writeByteArray(buf, families[family]);  // Column family name.
       final boolean has_qualifiers = (qualifiers != null && qualifiers[family] != null);
       final byte[][] family_qualifiers = has_qualifiers ? qualifiers[family] : DELETE_FAMILY_MARKER;
-      buf.writeInt(family_qualifiers.length);
       // Are we deleting a whole family at once or just a bunch of columns?
       final byte delete_column_or_cell_type = at_timestamp_only ? KeyValue.DELETE : KeyValue.DELETE_COLUMN;
       final byte type = (!has_qualifiers ? KeyValue.DELETE_FAMILY : delete_column_or_cell_type);
@@ -682,7 +680,21 @@ public final class DeleteRequest extends BatchableRpc
       return buf;
     }
     buf.writeInt(families.length);    // Number of families that follow.
-    serializePayload(buf);
+    for (int family = 0; family < families.length; family++) {
+      writeByteArray(buf, families[family]);  // Column family name.
+      final boolean has_qualifiers = (qualifiers != null && qualifiers[family] != null);
+      final byte[][] family_qualifiers = has_qualifiers ? qualifiers[family] : DELETE_FAMILY_MARKER;
+      buf.writeInt(family_qualifiers.length);
+      // Are we deleting a whole family at once or just a bunch of columns?
+      final byte delete_column_or_cell_type = at_timestamp_only ? KeyValue.DELETE : KeyValue.DELETE_COLUMN;
+      final byte type = (!has_qualifiers ? KeyValue.DELETE_FAMILY : delete_column_or_cell_type);
+
+      // Write the KeyValues
+      for (final byte[] qualifier : family_qualifiers) {
+        KeyValue.serialize(buf, type, timestamp,
+                key, families[family], qualifier, null);
+      }
+    }
     return buf;
   }
 
