@@ -29,6 +29,8 @@ package org.hbase.async;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 
 import org.jboss.netty.buffer.ChannelBuffer;
 
@@ -109,6 +111,13 @@ public final class Scanner {
   /** Special reference we use to indicate we're done scanning.  */
   private static final RegionInfo DONE =
     new RegionInfo(EMPTY_ARRAY, EMPTY_ARRAY, EMPTY_ARRAY);
+
+  private static final Comparator<ArrayList<KeyValue>> REVERSE_SCAN_SORT_COMPARATOR = new Comparator<ArrayList<KeyValue>>() {
+    @Override
+    public int compare(final ArrayList<KeyValue> thisRow, final ArrayList<KeyValue> thatRow) {
+      return Bytes.memcmp(thatRow.get(0).key(), thisRow.get(0).key());
+    }
+  };
 
   private final HBaseClient client;
   private final byte[] table;
@@ -740,15 +749,15 @@ public final class Scanner {
     if (region == DONE) {  // We're already done scanning.
       return Deferred.fromResult(null);
     } else if (region == null) {  // We need to open the scanner first.
-      if (this.isReversed() && !this.isFirstReverseRegion()){
-        return client.openReverseScanner(this)
-                .addCallbackDeferring(opened_scanner);
+      if (is_reversed && !isFirstReverseRegion()) {
+        return client.openReverseScanner(this).addCallbackDeferring(opened_scanner);
       } else {
-        if (is_reversed && start_key == EMPTY_ARRAY){
+        if (is_reversed && start_key == EMPTY_ARRAY) {
           start_key = Bytes.createMaxByteArray(Short.MAX_VALUE - table.length
                   - 3);
         }
-        return client.openScanner(this).addCallbackDeferring(opened_scanner);
+        return client.openScanner(this)
+                .addCallbackDeferring(opened_scanner);
       }
     }
     if(scannerClosedOnServer) {
@@ -783,6 +792,9 @@ public final class Scanner {
               throw new IllegalStateException("WTF? Scanner open callback"
                                               + " invoked with impossible"
                                               + " argument: " + arg);
+            }
+            if (is_first_reverse_region) {
+              is_first_reverse_region = false;
             }
             if (LOG.isDebugEnabled()) {
               LOG.debug("Scanner " + Bytes.hex(scanner_id) + " opened on " + region);
@@ -821,6 +833,9 @@ public final class Scanner {
           final ArrayList<ArrayList<KeyValue>> r =
             (ArrayList<ArrayList<KeyValue>>) response;
           rows = r;
+          if (is_reversed) {
+            Collections.sort(rows, REVERSE_SCAN_SORT_COMPARATOR);
+          }
         } else if (response != null) {
           throw new InvalidResponseException(ArrayList.class, response);
         }
@@ -1100,6 +1115,10 @@ public final class Scanner {
     return start_key;
   }
 
+  byte[] stopKey() {
+    return stop_key;
+  }
+
   /**
    * Sets the name of the region that's hosting {@code this.start_key}.
    * @param region The region we're currently supposed to be scanning.
@@ -1265,7 +1284,6 @@ public final class Scanner {
      */
     public OpenScannerRequest() {
       super(Scanner.this.table, start_key);
-      is_first_reverse_region = false;
     }
 
     /**
@@ -1409,8 +1427,16 @@ public final class Scanner {
       buf.writeByte(39);   // Code for a `Scan' parameter.
       buf.writeByte(39);   // Code again (see HBASE-2877).
       buf.writeByte(1);    // Manual versioning of Scan.
-      writeByteArray(buf, start_key);
-      writeByteArray(buf, stop_key);
+      if (is_reversed && is_first_reverse_region) {
+        writeByteArray(buf, stop_key);
+        byte[] inclusive_stop_key = new byte[start_key.length + 1];
+        System.arraycopy(start_key, 0, inclusive_stop_key, 0, start_key.length);
+        inclusive_stop_key[start_key.length] = 0;
+        writeByteArray(buf, inclusive_stop_key);
+      } else {
+        writeByteArray(buf, start_key);
+        writeByteArray(buf, stop_key);
+      }
       buf.writeInt(versions);  // Max number of versions to return.
 
       // Max number of KeyValues to get per RPC.
