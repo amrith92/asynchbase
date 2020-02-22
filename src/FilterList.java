@@ -138,7 +138,6 @@ public final class FilterList extends ScanFilter {
     buf.writeByte((byte) op.ordinal());  // 1
     buf.writeInt(filters.size());        // 4
     for (final ScanFilter filter : filters) {
-      buf.writeByte(54);  // 1 : code for WritableByteArrayComparable
       buf.writeByte(0);   // 1 : code for NOT_ENCODED
       filter.serializeOld(buf);
     }
