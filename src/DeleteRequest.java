@@ -224,6 +224,25 @@ public final class DeleteRequest extends BatchableRpc
   }
 
   /**
+   * Constructor to delete a specific number of cells in a row.
+   * <strong>These byte arrays will NOT be copied.</strong>
+   * @param table The table to edit.
+   * @param key The key of the row to edit in that table.
+   * @param families The column families to edit in that table.
+   * @param qualifiers The column qualifiers to delete in the respective families.
+   * @param timestamp The timestamp to set on this edit.
+   * @throws IllegalArgumentException if any argument is malformed.
+   */
+  public DeleteRequest(final byte[] table,
+                       final byte[] key,
+                       final byte[][] families,
+                       final byte[][][] qualifiers,
+                       final long timestamp) {
+    this(table, key, families, qualifiers,
+            timestamp, RowLock.NO_LOCK);
+  }
+
+  /**
    * Constructor to delete a specific cell with an explicit row lock.
    * <strong>These byte arrays will NOT be copied.</strong>
    * @param table The table to edit.
@@ -539,6 +558,13 @@ public final class DeleteRequest extends BatchableRpc
       // Are we deleting a whole family at once or just a bunch of columns?
       final byte delete_column_or_cell_type = at_timestamp_only ? KeyValue.DELETE : KeyValue.DELETE_COLUMN;
       final byte type = (!has_qualifiers ? KeyValue.DELETE_FAMILY : delete_column_or_cell_type);
+
+      if (isMultiCfEdit()) {
+        writeByteArray(buf, families[family]);
+        if (has_qualifiers) {
+          buf.writeInt(family_qualifiers.length);
+        }
+      }
 
       // Write the KeyValues
       for (final byte[] qualifier : family_qualifiers) {

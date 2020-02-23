@@ -538,6 +538,12 @@ public final class PutRequest extends BatchableRpc
   int payloadSize() {
     int size = 0;
     for (int i = 0; i < families.length; i++) {
+      if (isMultiCfEdit()) {
+        size += 1;
+        size += families[i].length;
+        size += 4; // the number of qualifiers
+        size += 4; // the total size of the qualifiers
+      }
       size += RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values);
     }
     return size;
@@ -546,6 +552,11 @@ public final class PutRequest extends BatchableRpc
   @Override
   void serializePayload(final ChannelBuffer buf) {
     for (int i = 0; i < families.length; i++) {
+      if (isMultiCfEdit()) {
+        writeByteArray(buf, families[i]);
+        buf.writeInt(qualifiers[i].length);
+        buf.writeInt(RowWriteRequestUtils.qualifierValueSize(key, i, families, qualifiers, values));
+      }
       for (int j = 0; j < qualifiers[i].length; j++) {
         KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[i],
             qualifiers[i][j], values[i][j]);

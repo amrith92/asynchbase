@@ -506,6 +506,12 @@ public final class AppendRequest extends BatchableRpc
   int payloadSize() {
     int size = 0;
     for (int family = 0; family < families.length; family++) {
+      if (isMultiCfEdit()) {
+        size += 1;
+        size += families[family].length;
+        size += 4; // The total number of qualifiers
+        size += 4; // The total size of the qualifiers
+      }
       size += RowWriteRequestUtils.qualifierValueSize(key, family, families, qualifiers, values);
     }
     return size;
@@ -514,6 +520,11 @@ public final class AppendRequest extends BatchableRpc
   @Override
   void serializePayload(final ChannelBuffer buf) {
     for (int family = 0; family < families.length; family++) {
+      if (isMultiCfEdit()) {
+        writeByteArray(buf, families[family]);
+        buf.writeInt(qualifiers[family].length);
+        buf.writeInt(RowWriteRequestUtils.qualifierValueSize(key, family, families, qualifiers, values));
+      }
       for (int i = 0; i < qualifiers[family].length; i++) {
         //HBASE KeyValue (org.apache.hadoop.hbase.KeyValue) doesn't have an Append Type
         KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[family],

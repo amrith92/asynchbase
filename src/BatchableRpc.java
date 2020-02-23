@@ -196,4 +196,7 @@ abstract class BatchableRpc extends HBaseRpc
    */
   abstract void serializePayload(final ChannelBuffer buf);
 
+  protected boolean isMultiCfEdit() {
+    return families != null && families.length > 1;
+  }
 }
