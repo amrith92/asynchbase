@@ -165,7 +165,9 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
                                || !Bytes.equals(prev.key, rpc.key)
                                // do not coalesce RPCs with multi CFs
                                || families.length > 1 || prev.families().length > 1
-                               || families == DeleteRequest.WHOLE_ROW);
+                               || families == DeleteRequest.WHOLE_ROW
+                               // do not coalesce Get RPCs with qualifiers specified
+                               || (isGet(rpc) && isDifferentGet(prev, rpc)));
       final boolean new_family = new_key || !Bytes.equals(prev.family(), families[0]);
 
       if (new_region) {
@@ -192,9 +194,21 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
         size += 1;  // byte: Version of Put.
         size += 3;  // vint: row key length (3 bytes => max length = 32768).
         size += key_length;  // The row key.
-        size += 8;  // long: Timestamp.
+
+        if (!isGet(rpc)) {
+          size += 8;  // long: Timestamp.
+        }
         size += 8;  // long: Lock ID.
-        size += 1;  // bool: Whether or not to write to the WAL.
+        if (!isGet(rpc)) {
+          size += 1;  // bool: Whether or not to write to the WAL.
+        } else {
+          size += 4; // int: Support only fetching the latest version
+          size += 1; // bool: Whether or not this get has filters
+          size += 1; // bool: Whether or not to populate block cache
+          size += 8; // long: The min timestamp
+          size += 8; // long: The max timestamp
+          size += 1; // bool: Consider all time
+        }
         size += 4;  // int:  Number of families for which we have edits.
       }
 
@@ -206,9 +220,11 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
         }
         size += 1;  // vint: Family length (guaranteed on 1 byte).
         size += families[0].length;  // The family.
-        size += 4;  // int:  Number of KeyValues that follow.
-        if (rpc.code() == PutRequest.CODE || rpc.code() == AppendRequest.CODE) {
-          size += 4;  // int:  Total number of bytes for all those KeyValues.
+        if (!isGet(rpc)) {
+          size += 4;  // int:  Number of KeyValues that follow.
+          if (rpc.code() == PutRequest.CODE || rpc.code() == AppendRequest.CODE) {
+            size += 4;  // int:  Total number of bytes for all those KeyValues.
+          }
         }
       }
 
@@ -304,7 +320,9 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
                                || !Bytes.equals(prev.key, rpc.key)
                                // do not coalesce RPCs with multi CFs
                                || families.length > 1 || prev.families().length > 1
-                               || families == DeleteRequest.WHOLE_ROW);
+                               || families == DeleteRequest.WHOLE_ROW
+                               // do not coalesce Get RPCs with qualifiers specified
+                               || (isGet(rpc) && isDifferentGet(prev, rpc)));
       final boolean new_family = new_key || !Bytes.equals(prev.family(), families[0]);
 
       if (new_key && use_multi && nkeys_index > 0) {
@@ -367,14 +385,27 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
         buf.writeByte(rpc.version(server_version)); // Undocumented versioning.
         writeByteArray(buf, key);  // The row key.
 
-        // This timestamp is unused, only the KeyValue-level timestamp is
-        // used, except in one case: whole-row deletes.  In that case only,
-        // this timestamp is used by the RegionServer to create per-family
-        // deletes for that row.  See HRegion.prepareDelete() for more info.
-        buf.writeLong(rpc.timestamp);  // Timestamp.
+        if (!isGet(rpc)) {
+          // This timestamp is unused, only the KeyValue-level timestamp is
+          // used, except in one case: whole-row deletes.  In that case only,
+          // this timestamp is used by the RegionServer to create per-family
+          // deletes for that row.  See HRegion.prepareDelete() for more info.
+          buf.writeLong(rpc.timestamp);  // Timestamp.
+        }
 
         buf.writeLong(RowLock.NO_LOCK);    // Lock ID.
-        buf.writeByte(rpc.durable ? 0x01 : 0x00);  // Use the WAL?
+
+        if (!isGet(rpc)) {
+          buf.writeByte(rpc.durable ? 0x01 : 0x00);  // Use the WAL?
+        } else {
+          buf.writeInt(1); // support only fetching the latest version for Get requests
+          buf.writeByte(0x00); // Don't support filters for batched Get requests
+          buf.writeByte(0x00); // Don't support cacheBlocks for batched Get requests
+          buf.writeLong(0L); // min timestamp = start of time
+          buf.writeLong(Long.MAX_VALUE); // max timestamp = end of time
+          buf.writeByte(0x01); // all time = true
+        }
+
         nfamilies_index = buf.writerIndex();
         // Number of families that follow.
         buf.writeInt(0);  // We'll monkey patch this later.
@@ -406,13 +437,15 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
         nfamilies++;
         writeByteArray(buf, families[0]);  // The column family.
 
-        nkeys_per_family_index = buf.writerIndex();
-        // Number of "KeyValues" that follow.
-        buf.writeInt(0);  // We'll monkey patch this later.
-        if (rpc.code() == PutRequest.CODE || rpc.code() == AppendRequest.CODE) {
-          // Total number of bytes taken by those "KeyValues".
-          // This is completely useless and only done for `Put'.
+        if (!isGet(rpc)) {
+          nkeys_per_family_index = buf.writerIndex();
+          // Number of "KeyValues" that follow.
           buf.writeInt(0);  // We'll monkey patch this later.
+          if (rpc.code() == PutRequest.CODE || rpc.code() == AppendRequest.CODE) {
+            // Total number of bytes taken by those "KeyValues".
+            // This is completely useless and only done for `Put'.
+            buf.writeInt(0);  // We'll monkey patch this later.
+          }
         }
       }
       nkeys_per_family += rpc.numKeyValues();
@@ -451,6 +484,50 @@ final class MultiAction extends HBaseRpc implements HBaseRpc.IsEdit {
     buf.setInt(header_length + 4 + 1 + 1, nregions);
 
     return buf;
+  }
+
+  private boolean isDifferentGet(final BatchableRpc prev, final BatchableRpc rpc) {
+
+    if (!isGet(rpc)) {
+      return false;
+    } else if (!isGet(prev)) {
+      return true;
+    } else {
+      final GetRequest prevRpc = (GetRequest) prev;
+      final GetRequest newRpc = (GetRequest) rpc;
+
+      boolean result = false;
+      if (prevRpc.qualifiers() == null) {
+        if (newRpc.qualifiers() != null) {
+          result = true;
+        }
+      } else {
+        if (prevRpc.qualifiers().length == newRpc.qualifiers().length) {
+          for (int i = 0; i < prevRpc.qualifiers().length; i++) {
+            byte[][] prev_qualifiers = prevRpc.qualifiers()[i];
+            byte[][] new_qualifiers = newRpc.qualifiers()[i];
+            if (prev_qualifiers.length == new_qualifiers.length) {
+              for (int j = 0; j < prev_qualifiers.length; j++) {
+                if (Bytes.memcmp(prev_qualifiers[j], new_qualifiers[j]) != 0) {
+                  result = true;
+                  break;
+                }
+              }
+            } else {
+              result = true;
+            }
+          }
+        } else {
+          result = true;
+        }
+      }
+
+      return result;
+    }
+  }
+
+  private boolean isGet(final BatchableRpc rpc) {
+    return rpc.code() == GetRequest.GET_CODE;
   }
 
   public String toString() {

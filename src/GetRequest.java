@@ -26,7 +26,8 @@
  */
 package org.hbase.async;
 
-import java.util.ArrayList;
+import java.nio.ByteBuffer;
+import java.util.*;
 
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.hbase.async.generated.ClientPB;
@@ -52,6 +53,9 @@ public final class GetRequest extends BatchableRpc
   private static final byte[] EXISTS =
     new byte[] { 'e', 'x', 'i', 's', 't', 's' };
 
+  /** The Get request version */
+  private static final byte GET_VERSION = 0x2;
+
   private byte[][][] qualifiers;
   private long lockid = RowLock.NO_LOCK;
   private boolean populate_blockcache = true;
@@ -76,6 +80,9 @@ public final class GetRequest extends BatchableRpc
 
   /** When set in the `versions' field, this is an Exist RPC. */
   private static final int EXIST_FLAG = 0x1;
+
+  /** Code type used for serialized `Get' objects.  */
+  static final byte GET_CODE = 32;
 
   /**
    * Constructor.
@@ -172,7 +179,24 @@ public final class GetRequest extends BatchableRpc
                     final byte[][][] qualifiers) {
     super(table, key);
     this.families = families;
-    this.qualifiers = qualifiers;
+    if (qualifiers == null) {
+      this.qualifiers = null;
+    } else {
+      this.qualifiers = new byte[families.length][][];
+      for (int family = 0; family < families.length; family++) {
+        if (qualifiers[family] == null || qualifiers[family].length == 0) {
+          continue;
+        }
+        final List<byte[]> sortedQualifiers = Arrays.asList(qualifiers[family]);
+        Collections.sort(sortedQualifiers, Bytes.MEMCMP);
+        this.qualifiers[family] = new byte[sortedQualifiers.size()][];
+        for (int i = 0; i < sortedQualifiers.size(); i++) {
+          byte[] theQualifier = sortedQualifiers.get(i);
+          this.qualifiers[family][i] = new byte[theQualifier.length];
+          System.arraycopy(theQualifier, 0, this.qualifiers[family][i], 0, theQualifier.length);
+        }
+      }
+    }
     this.bufferable = false; //don't buffer get request
   }
 
@@ -822,30 +846,58 @@ public final class GetRequest extends BatchableRpc
   
   @Override
   byte version(byte server_version) {
-    // TODO Auto-generated method stub
-    return 0;
+    return GET_VERSION;
   }
   
   @Override
   byte code() {
-    // TODO Auto-generated method stub
-    return 0;
+    return GET_CODE;
   }
   
   @Override
   int numKeyValues() {
-    // TODO Auto-generated method stub
-    return 0;
+    return qualifiers == null || qualifiers.length == 0 ? 0 : qualifiers[0].length;
   }
   
   @Override
   int payloadSize() {
-    // TODO Auto-generated method stub
-    return 0;
+    int size = 0;
+
+    for (int i = 0; i < families.length; i++) {
+      if (isMultiCfEdit()) {
+        size += 1;
+        size += families[i].length;
+      }
+
+      size += 1; // Flag that tells whether this Get request contains columns or not
+      if (qualifiers != null && qualifiers[i] != null && qualifiers[i].length > 0) {
+        size += qualifiers[i].length;
+        for (int j = 0; j < qualifiers[i].length; ++j) {
+          size += 1;
+          size += qualifiers[i][j].length;
+        }
+      }
+    }
+
+    return size;
   }
   
   @Override
-  void serializePayload(ChannelBuffer buf) {
-    // TODO Auto-generated method stub
+  void serializePayload(final ChannelBuffer buf) {
+    for (int i = 0; i < families.length; i++) {
+      if (isMultiCfEdit()) {
+        writeByteArray(buf, families[i]);
+      }
+
+      if (qualifiers != null && qualifiers[i] != null) {
+        buf.writeByte(0x01); // columns are specified
+        buf.writeInt(qualifiers[i].length); // the number of columns
+        for (int j = 0; j < qualifiers[i].length; ++j) {
+          writeByteArray(buf, qualifiers[i][j]);
+        }
+      } else {
+        buf.writeByte(0x00); // no columns specified
+      }
+    }
   }
 }
