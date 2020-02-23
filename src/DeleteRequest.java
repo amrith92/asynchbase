@@ -553,7 +553,7 @@ public final class DeleteRequest extends BatchableRpc
     }
 
     for (int family = 0; family < families.length; family++) {
-      final boolean has_qualifiers = (qualifiers != null && qualifiers[family] != null);
+      final boolean has_qualifiers = (qualifiers != null && qualifiers[family] != null && qualifiers[family] != DELETE_FAMILY_MARKER);
       final byte[][] family_qualifiers = has_qualifiers ? qualifiers[family] : DELETE_FAMILY_MARKER;
       // Are we deleting a whole family at once or just a bunch of columns?
       final byte delete_column_or_cell_type = at_timestamp_only ? KeyValue.DELETE : KeyValue.DELETE_COLUMN;
@@ -708,7 +708,7 @@ public final class DeleteRequest extends BatchableRpc
     buf.writeInt(families.length);    // Number of families that follow.
     for (int family = 0; family < families.length; family++) {
       writeByteArray(buf, families[family]);  // Column family name.
-      final boolean has_qualifiers = (qualifiers != null && qualifiers[family] != null);
+      final boolean has_qualifiers = (qualifiers != null && qualifiers[family] != null && qualifiers[family] != DELETE_FAMILY_MARKER);
       final byte[][] family_qualifiers = has_qualifiers ? qualifiers[family] : DELETE_FAMILY_MARKER;
       buf.writeInt(family_qualifiers.length);
       // Are we deleting a whole family at once or just a bunch of columns?
