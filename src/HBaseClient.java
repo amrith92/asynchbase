@@ -1251,6 +1251,19 @@ public final class HBaseClient {
   }
 
   /**
+   * Performs an exists query
+   * @param request The {@code get} request configured as exists.
+   * @return A deferred list of key-values that matched the get request.
+   */
+  public Deferred<Boolean> exists(final GetRequest request) {
+    if (!request.isExistsQuery()) {
+      throw new IllegalArgumentException("Expected an exists query, not a Get request!");
+    }
+    num_gets.increment();
+    return sendRpcToRegion(request).addCallbacks(exist, Callback.PASSTHROUGH);
+  }
+
+  /**
    * Retrieves data from HBase.
    * @param request The {@code get} request.
    * @return A deferred list of key-values that matched the get request.
@@ -1259,6 +1272,21 @@ public final class HBaseClient {
     num_gets.increment();
     return sendRpcToRegion(request).addCallbacks(got, Callback.PASSTHROUGH);
   }
+
+  /** Singleton callback to handle responses of "exists" RPCs.  */
+  private static final Callback<Boolean, Object> exist =
+    new Callback<Boolean, Object>() {
+      public Boolean call(final Object response) {
+        if (response instanceof Boolean) {
+          return (Boolean) response;
+        } else {
+          throw new InvalidResponseException(Boolean.class, response);
+        }
+      }
+      public String toString() {
+        return "type exists response";
+      }
+    };
 
   /** Singleton callback to handle responses of "get" RPCs.  */
   private static final Callback<ArrayList<KeyValue>, Object> got =

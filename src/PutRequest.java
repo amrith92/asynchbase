@@ -559,7 +559,7 @@ public final class PutRequest extends BatchableRpc
       }
       for (int j = 0; j < qualifiers[i].length; j++) {
         KeyValue.serialize(buf, KeyValue.PUT, timestamp, key, families[i],
-            qualifiers[i][j], values[i][j]);
+          qualifiers[i][j], values[i][j]);
       }
     }
   }

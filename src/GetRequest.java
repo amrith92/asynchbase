@@ -809,6 +809,10 @@ public final class GetRequest extends BatchableRpc
     
     return cells;
   }
+
+  public boolean isExistsQuery() {
+    return EXIST_FLAG == (this.versions & EXIST_FLAG);
+  }
   
   @Override
   MutationProto toMutationProto() {
